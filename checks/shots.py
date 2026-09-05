@@ -4,7 +4,11 @@
 AppTest 는 렌더 트리를 돌려주지만 «보이는 모습»은 안 준다.
 색이 의미를 나르는 앱이라 그건 확인이 반쪽이다 — 그래서 진짜 브라우저로 찍는다.
 
+    pip install playwright && python -m playwright install chromium
     python checks/shots.py            (앱을 직접 띄우고 찍는다)
+
+playwright 는 requirements.txt 에 넣지 않는다. 사진 찍는 데만 쓰는 도구인데
+배포처가 브라우저까지 내려받게 만들 이유가 없다.
 
 사진은 docs/shots/ 에 남는다.
 """
