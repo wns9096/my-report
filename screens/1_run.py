@@ -176,7 +176,7 @@ _sandbox(tables)
 st.dataframe(
     prof, hide_index=True, use_container_width=True,
     column_config={
-        "행": st.column_config.NumberColumn("행", format="%,d"),
+        "행": st.column_config.NumberColumn("행", format="localized"),
         "메모리(MB)": st.column_config.ProgressColumn(
             "메모리(MB)", format="%.1f MB", min_value=0,
             max_value=float(prof["메모리(MB)"].max())),

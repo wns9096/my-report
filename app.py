@@ -6,10 +6,10 @@
 목  무엇을 감출지 정한다                분해 · 못 믿을 조건 · 판정 · 게이트 2
 금  문장으로 내보낸다                   리포트 · 인과 검사 · PDF · 게이트 3
 
-메뉴는 st.navigation 으로 만든다. pages/ 자동 멀티페이지는 파일 이름이 곧
+메뉴는 st.navigation 으로 만든다. screens/ 자동 멀티페이지는 파일 이름이 곧
 메뉴라서 순서와 묶음을 못 바꾸고, 이름을 고치면 URL 이 같이 바뀐다.
 여기서는 파일 이름과 메뉴 이름이 따로다 — 파일은 ASCII, 메뉴는 우리말이다.
-(st.navigation 을 쓰면 pages/ 자동 스캔은 꺼진다. 실제로 확인했다.)
+(st.navigation 을 쓰면 screens/ 자동 스캔은 꺼진다. 실제로 확인했다.)
 """
 import streamlit as st
 
@@ -27,15 +27,15 @@ def _icon(need):
 
 PAGES = {
     "분석": [
-        st.Page("pages/1_run.py", title="실행", icon=":material/play_arrow:",
+        st.Page("screens/1_run.py", title="실행", icon=":material/play_arrow:",
                 default=True),
-        st.Page("pages/2_dashboard.py", title="대시보드",
+        st.Page("screens/2_dashboard.py", title="대시보드",
                 icon=_icon(1) or ":material/insights:"),
-        st.Page("pages/3_report.py", title="리포트",
+        st.Page("screens/3_report.py", title="리포트",
                 icon=_icon(2) or ":material/description:"),
     ],
     "기록": [
-        st.Page("pages/4_archive.py", title="아카이브",
+        st.Page("screens/4_archive.py", title="아카이브",
                 icon=":material/inventory_2:"),
     ],
 }

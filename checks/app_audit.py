@@ -28,7 +28,7 @@ from core import config, context, gates, loader, validate  # noqa: E402
 from report import sections as S  # noqa: E402
 
 SRC = sorted(set(ROOT.glob("*.py")) | set(ROOT.glob("core/*.py"))
-             | set(ROOT.glob("pages/*.py")) | set(ROOT.glob("viz/*.py"))
+             | set(ROOT.glob("screens/*.py")) | set(ROOT.glob("viz/*.py"))
              | set(ROOT.glob("report/*.py")))
 
 FINDINGS = []
@@ -165,7 +165,7 @@ def r7_no_wall_clock():
     bad = []
     for p in SRC:
         rel = p.relative_to(ROOT).as_posix()
-        if rel.startswith(("pages/", "core/gates.py")):
+        if rel.startswith(("screens/", "core/gates.py")):
             continue          # 기록의 타임스탬프는 계산이 아니다
         for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
             if pat.search(line):
@@ -197,7 +197,7 @@ def r9_few_blocks(tables):
 def r10_single_source():
     """화면과 문서가 각자 계산하지 않고 context 를 거치는가."""
     bad = []
-    for p in sorted(ROOT.glob("pages/*.py")) + sorted(ROOT.glob("report/*.py")):
+    for p in sorted(ROOT.glob("screens/*.py")) + sorted(ROOT.glob("report/*.py")):
         txt = p.read_text(encoding="utf-8")
         rel = p.relative_to(ROOT).as_posix()
         for fn in ("metrics.funnel(", "metrics.kpis(", "metrics.monthly(",

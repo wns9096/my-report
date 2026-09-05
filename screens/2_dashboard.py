@@ -18,21 +18,32 @@ def _fmt(v, kind):
 
 
 def _kpi_card(col, name, d, monthly):
-    """지표 하나. st.metric(border=True) 가 카드 테두리를 대신한다.
+    """지표 하나.
 
-    직전에는 이 테두리를 직접 쓴 HTML 로 그렸다. 테마를 바꾸면 그 색만
-    안 따라와서, 어두운 테마에서 밝은 회색 상자가 그대로 남는다.
+    ★ 처음에는 카드 안에 값·배지·설명·스파크라인을 순서대로 쌓았다.
+      설명 길이가 지표마다 달라서 카드 높이가 제각각이 되고, 짧은 카드의
+      스파크라인만 위로 올라와 줄이 안 맞았다. 넷을 나란히 두는 그림에서
+      높이가 어긋나면 비교하는 그림이 아니게 된다.
+
+      그래서 설명은 카드 밖(도움말)으로 빼고, 카드 안에는 세 줄만 둔다 —
+      이름 · 값과 전월 대비 · 판정. 세 줄은 지표가 달라도 길이가 같다.
     """
     state = context.kpi_state(name, d["값"])
+    help_ = f"{d['설명']} · 표본 {d['표본']:,}"
+
+    # ★ 큰 숫자 옆에 화살표(전월 대비)를 붙였다가 뺐다.
+    #   큰 숫자는 «기간 전체» 값이고 화살표는 «지난달 대비»다. 기준이 다른
+    #   두 숫자를 붙여 놓으면 «18.1% 가 5.2%p 올랐다»로 읽힌다.
+    #   추이는 밑의 월별 그림이 기준을 밝히고 보여 준다.
+    if name in monthly.columns:
+        m = monthly[name].dropna()
+        if len(m) >= 2:
+            help_ += (f" · 월별로는 {_fmt(float(m.min()), d['형식'])}"
+                      f"~{_fmt(float(m.max()), d['형식'])} 사이")
     with col:
         with st.container(border=True):
-            st.metric(name, _fmt(d["값"], d["형식"]))
+            st.metric(f"{name} (기간 전체)", _fmt(d["값"], d["형식"]), help=help_)
             st.badge(f"{MARK[state]} {KO[state]}", color=BADGE[state])
-            st.caption(f"{d['설명']} · 표본 {d['표본']:,}")
-            if name in monthly.columns:
-                ch = charts.sparkline(monthly[name], "")
-                if ch is not None:
-                    st.altair_chart(ch, use_container_width=True)
 
 
 def _verdict_card(c):
@@ -137,15 +148,25 @@ ks = ctx["kpis"]
 cols = st.columns(len(ks))
 for col, (name, d) in zip(cols, ks.items()):
     _kpi_card(col, name, d, ctx["monthly"])
-st.caption(f"임계값 근거는 `core/config.py` THRESHOLDS 주석에 있다. "
-           f"기준일 {config.AS_OF}.")
+st.caption(f"«정상 / 주의 / 차단»을 가르는 값과 그 근거는 설정 파일 한 곳에 "
+           f"적혀 있다. 모든 계산의 기준일은 {config.AS_OF}로 고정돼 있어 "
+           f"언제 돌려도 같은 값이 나온다.")
+
+_th = config.THRESHOLDS.get(config.MAIN_METRIC, {})
+_trend = charts.monthly_line(ctx["monthly"], config.MAIN_METRIC,
+                             warn=_th.get("경고"), danger=_th.get("위험"))
+if _trend is not None:
+    st.markdown(f"##### {config.MAIN_METRIC} 월별 추이")
+    st.altair_chart(_trend, use_container_width=True)
+    st.caption("마지막 달은 아직 결과가 다 나오지 않았을 수 있다. "
+               "점 하나가 내려갔다고 성과가 나빠진 것으로 읽지 않는다.")
 
 st.divider()
 
 # ── 퍼널 ─────────────────────────────────────────────────────────────────
 left, right = st.columns([3, 2])
 with left:
-    st.markdown(f"#### 획득 퍼널 — 그레인 **{ctx['grain_ko']}**")
+    st.markdown(f"#### 획득 퍼널 — **{ctx['grain_ko']}** 기준")
     st.altair_chart(charts.funnel_bar(ctx["funnel"], worst_idx=ctx["worst"]),
                     use_container_width=True)
     f = ctx["funnel"]
@@ -153,10 +174,19 @@ with left:
     st.caption(f"병목: {f.iloc[w-1]['단계']} → {f.iloc[w]['단계']} "
                f"{f.iloc[w]['직전 대비']:.1%} · 누적 {f.iloc[-1]['누적']:.2%}")
 with right:
-    st.markdown("#### 같은 퍼널, 두 그레인")
-    st.dataframe(ctx["gap"], hide_index=True, use_container_width=True)
-    st.caption("둘 다 맞는 숫자다. 다른 질문에 답할 뿐이다 — "
-               "사람은 «결국 전환했는가», 건은 «이번에 전환했는가».")
+    st.markdown("#### 같은 퍼널을 두 단위로 세면")
+    st.dataframe(
+        ctx["gap"], hide_index=True, use_container_width=True,
+        column_config={
+            "사람": st.column_config.NumberColumn("지원자 (명)", format="localized"),
+            "건": st.column_config.NumberColumn("지원 (건)", format="localized"),
+            "건/사람": st.column_config.NumberColumn(
+                "1명당 건수", format="%.2f",
+                help="한 사람이 이 단계까지 평균 몇 건을 넣었는가"),
+        })
+    st.caption("둘 다 맞는 숫자다. 답하는 질문이 다를 뿐이다. "
+               "지원자 1명 기준은 «이 사람이 결국 합격했는가», "
+               "지원 1건 기준은 «이 지원서가 통과했는가»에 답한다.")
 
 st.divider()
 
@@ -167,19 +197,36 @@ with left:
     st.altair_chart(charts.funnel_bar(ctx["retention"]), use_container_width=True)
 with right:
     st.markdown("#### 퍼널인가 분류인가")
-    st.dataframe(ctx["retention_skip"], hide_index=True, use_container_width=True)
+    st.dataframe(
+        ctx["retention_skip"], hide_index=True, use_container_width=True,
+        column_config={"앞 단계 미경유": st.column_config.NumberColumn(
+            "앞 단계 미경유 (명)", format="localized")})
     skip = int(ctx["retention_skip"]["앞 단계 미경유"].sum())
     if skip == 0:
         st.caption("앞 단계를 거치지 않고 나타난 대상 0건 — 퍼널로 부를 수 있다.")
     else:
         st.warning(f"앞 단계 미경유 {skip:,}건. 퍼널이 아니라 분류일 수 있다.")
     st.markdown("**이탈 분류** — 순서가 없으므로 전환율을 내지 않는다")
-    st.dataframe(ctx["churn"], hide_index=True, use_container_width=True,
-                 column_config={"비율": st.column_config.ProgressColumn(
-                     "비율", format="%.1f%%", min_value=0, max_value=100)})
-    st.caption(f"판정 대상 {ctx['judged']:,}명 · 판정 보류 {ctx['pending']:,}명 "
-               f"(관측 {config.JUDGE_MIN_DAYS}일 미만). "
-               f"성공 종료는 이탈이 아니므로 분모에서 뺐다.")
+    # 컬럼 이름을 안 맞춰 두면 서식이 안 먹고 0.6575 · None 이 그대로 나온다.
+    # 값이 없는 칸은 빈칸으로 둔다 — «None» 은 사람에게 하는 말이 아니다.
+    # 비중이 없는 행(성공 종료·판정 보류)은 분모 밖이라 값이 비어 있다.
+    # 그냥 두면 화면에 «None» 이 찍힌다 — 사람에게 하는 말이 아니다.
+    # Styler 로 빈 칸을 «—» 로 바꾼다.
+    _churn = ctx["churn"].style.format(
+        {"인원": "{:,.0f}", "구성비(판정 대상 기준)": "{:.1%}"}, na_rep="—")
+    st.dataframe(
+        _churn, hide_index=True, use_container_width=True,
+        column_config={
+            "인원": st.column_config.Column("인원 (명)"),
+            "구성비(판정 대상 기준)": st.column_config.Column(
+                "판정 대상 중 비중",
+                help="분모는 판정 대상이다. 성공 종료와 판정 보류는 분모 밖이라 "
+                     "비중을 내지 않는다."),
+        })
+    st.caption(f"이탈률의 분모는 **판정 대상 {ctx['judged']:,}명**이다. "
+               f"관측이 {config.JUDGE_MIN_DAYS}일에 못 미쳐 아직 판정하지 않은 "
+               f"{ctx['pending']:,}명과, 최종 합격해서 활동을 멈춘 사람은 뺐다 — "
+               f"합격한 사람을 이탈로 세면 안 된다.")
 
 with st.expander("유지 단계 후보 — 순서는 코드가 아니라 내가 정했다"):
     st.dataframe(ctx["retention_candidates"], hide_index=True,
@@ -208,32 +255,48 @@ d = verdict.decomp_with_trust(ctx["tables"], axis) if axis != ctx["axis"] \
     else ctx["decomp"]
 gap = metrics.biggest_gap(d)
 _grain = "application" if metrics.AXES[axis][0] == "applications" else "person"
-st.caption(f"구간 {config.FUNNEL_STEPS[0]} → {config.FUNNEL_STEPS[1]} · "
-           f"그레인 {context.GRAIN_KO[_grain]} · 범례 {charts.verdict_legend()}")
+st.caption(f"보는 구간은 «{config.FUNNEL_STEPS[0]} → {config.FUNNEL_STEPS[1]}», "
+           f"세는 단위는 {context.GRAIN_KO[_grain]}다. "
+           f"기호 — {charts.verdict_legend()}")
 
-c1, c2 = st.columns([3, 1])
-with c1:
-    st.altair_chart(charts.decomp_bar(d, axis), use_container_width=True)
-with c2:
-    st.altair_chart(charts.share_bar(d, axis), use_container_width=True)
+st.altair_chart(charts.decomp_bar(d, axis), use_container_width=True)
 
 if gap:
     st.markdown(
-        f"**격차가 가장 큰 두 칸** — {gap['높은 칸']} {gap['높은 값']:.1%} vs "
-        f"{gap['낮은 칸']} {gap['낮은 값']:.1%} · **{gap['격차'] * 100:.1f}%p**"
+        f"전환율이 가장 높은 칸은 **{gap['높은 칸']}** 으로 {gap['높은 값']:.1%}, "
+        f"가장 낮은 칸은 **{gap['낮은 칸']}** 으로 {gap['낮은 값']:.1%}다. "
+        f"두 칸의 차이는 **{gap['격차'] * 100:.1f}%p**."
         + ("" if gap["격차"] >= 0.05 else
-           "  \n격차가 5%p 하한 아래다. 이 축으로는 안 갈린다 — 그것도 결과다."))
+           "  \n차이가 5%p 하한 아래다. 이 축으로는 안 갈린다 — 그것도 결과다."))
 if "기여도(%p)" in d.columns:
-    st.caption("비중 × 격차가 실제 크기다. 비중 3% 칸을 고쳐도 전체는 거의 "
-               "안 움직인다. 표의 «기여도(%p)» 가 그 값이다.")
+    st.caption("전환율이 낮다고 다 급한 것은 아니다. 그 칸이 전체의 3%뿐이면 "
+               "고쳐도 전체는 거의 안 움직인다. 표의 «기여도 (%p)» 가 그 크기다 — "
+               "그 칸을 전체 평균까지 끌어올렸을 때 전체 전환율이 몇 %p "
+               "움직이는가를 나타낸다.")
     shown = d.drop(columns=["사유"]) if "사유" in d.columns else d
+    # ★ 전환율·비중은 0~1 사이의 «비율»이다. 서식을 두 번 틀렸다.
+    #   "%.1f%%" 로 찍으면 0.234 를 «0.2%» 로 쓴다 — 값이 100배 틀리게 보인다.
+    #   그렇다고 percent 서식을 쓰면 «17.62%» 가 되어 바로 위 그림의 «17.6%» 와
+    #   자릿수가 어긋난다. 같은 값이 두 자리로 보이면 읽는 사람이 둘을 다른
+    #   값으로 읽는다. 그래서 표시용으로 100을 곱해 두고 자릿수를 직접 맞춘다.
+    shown = shown.copy()
+    for c in ("전환율", "비중"):
+        if c in shown.columns:
+            shown[c] = shown[c] * 100
     st.dataframe(
         shown, hide_index=True, use_container_width=True,
         column_config={
+            "시작": st.column_config.NumberColumn("시작 (건)", format="localized"),
+            "도달": st.column_config.NumberColumn("도달 (건)", format="localized"),
             "전환율": st.column_config.ProgressColumn(
                 "전환율", format="%.1f%%", min_value=0,
                 max_value=float(shown["전환율"].max() or 1)),
-            "비중": st.column_config.NumberColumn("비중", format="%.1f%%"),
+            "비중": st.column_config.NumberColumn(
+                "전체에서 차지하는 비중", format="%.1f%%"),
+            "기여도(%p)": st.column_config.NumberColumn(
+                "기여도 (%p)", format="%.2f",
+                help="이 칸이 전체 평균과 같아진다면 전체 전환율이 몇 %p "
+                     "움직이는가. 음수면 그 칸이 지금 평균보다 낫다는 뜻이다."),
         })
 
 with st.expander("축 후보 여섯 — 왜 이 축을 골랐는가"):
@@ -256,8 +319,9 @@ st.markdown("#### 시작 시점별 — 최근 구간은 성과가 아니라 시�
 st.altair_chart(charts.cohort_bar(ctx["cohort"], "서류통과율", "서류 통과율"),
                 use_container_width=True)
 hid = ctx["cohort"]["못 믿을 사유"].notna().sum()
-st.caption(f"회색 칸 {hid}개는 값을 그리지 않았다. "
-           f"유효 구간은 {config.PERIOD[0]} ~ {config.VALID_UNTIL}.")
+st.caption(f"회색 칸 {hid}개는 아직 관측 기간이 {config.MIN_OBS_DAYS}일에 못 미쳐 "
+           f"값을 그리지 않았다. 성적이 나쁜 것이 아니라 아직 결과가 안 난 것이다. "
+           f"값을 믿을 수 있는 구간은 {config.PERIOD[0]} ~ {config.VALID_UNTIL}다.")
 
 st.divider()
 
@@ -268,8 +332,9 @@ st.caption("이 비교는 인과를 주장할 수 없다. 무작위 배정이 �
 dist = verdict.count_by_verdict(ctx["cards"])
 st.write(" · ".join(f"{config.MARKS[verdict.VERDICTS[k]]} {k} {v}"
                     for k, v in dist.items()))
-st.caption(f"비교 축은 **{config.CARD_AXIS}** — 주지표와 가드레일이 사람에 "
-           f"붙으므로 사람 단위로 견준다. 분해(위)와 그레인이 다르다.")
+st.caption(f"비교 기준은 **{config.CARD_AXIS}**다. 주지표와 가드레일이 사람에 "
+           f"붙는 값이라 지원자 1명 단위로 견준다 — 위의 분해(지원 1건 단위)와 "
+           f"세는 단위가 다르다. 한쪽으로 맞추면 한쪽이 틀린다.")
 for c in ctx["cards"]:
     _verdict_card(c)
 

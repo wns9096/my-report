@@ -49,20 +49,24 @@ def topbar():
     container(border=True) 는 테마를 따라간다.
     """
     with st.container(border=True):
-        c = st.columns([3, 2, 2, 2])
-        c[0].caption(f"**{config.DATASET}**")
-        c[1].caption(f"{config.PERIOD[0]} ~ {config.PERIOD[1]}")
-        c[2].caption(f"그레인 {context.GRAIN_KO[config.GRAIN]}")
-        c[3].caption(f"유효 구간 ~{config.VALID_UNTIL}")
+        # 칸을 넷으로 쪼개면 좁은 화면에서 «2025-01-01 ~ 2025-12-» / «31» 로 끊긴다.
+        # 둘로 두고, 끊기면 안 되는 것끼리 묶는다.
+        left, right = st.columns([4, 5])
+        left.caption(f"**{config.DATASET}**")
+        right.caption(
+            f"분석 기간 {config.PERIOD[0]} ~ {config.PERIOD[1]} &nbsp;·&nbsp; "
+            f"세는 단위 {context.GRAIN_KO[config.GRAIN]} &nbsp;·&nbsp; "
+            f"값을 믿을 수 있는 구간 ~{config.VALID_UNTIL}")
 
 
 def sidebar():
     with st.sidebar:
         st.divider()
-        st.caption(f"기간 {config.PERIOD[0]} ~ {config.PERIOD[1]}")
-        st.caption(f"기준일 {config.AS_OF}")
-        st.caption(f"그레인 {context.GRAIN_KO[config.GRAIN]}")
-        st.caption(f"최소 표본 {config.MIN_SAMPLE} · 최소 관측 {config.MIN_OBS_DAYS}일")
+        st.caption(f"**분석 기간** {config.PERIOD[0]} ~ {config.PERIOD[1]}")
+        st.caption(f"**기준일** {config.AS_OF}")
+        st.caption(f"**세는 단위** {context.GRAIN_KO[config.GRAIN]}")
+        st.caption(f"**값을 내는 최소 조건** 표본 {config.MIN_SAMPLE}건 · "
+                   f"관측 {config.MIN_OBS_DAYS}일")
         st.divider()
         st.caption("게이트")
         for g in (1, 2, 3):

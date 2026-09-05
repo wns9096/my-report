@@ -16,10 +16,10 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 # 메뉴 이름 → 실제 스크립트. st.navigation 을 쓰면 파일 이름과 메뉴 이름이
 # 따로 논다 — 그게 목적이다. 대신 전환은 파일 경로로 한다.
 SCREENS = {
-    "실행": "pages/1_run.py",
-    "대시보드": "pages/2_dashboard.py",
-    "리포트": "pages/3_report.py",
-    "아카이브": "pages/4_archive.py",
+    "실행": "screens/1_run.py",
+    "대시보드": "screens/2_dashboard.py",
+    "리포트": "screens/3_report.py",
+    "아카이브": "screens/4_archive.py",
 }
 
 
