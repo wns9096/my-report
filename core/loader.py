@@ -73,3 +73,24 @@ def profile(tables):
             "메모리(MB)": round(df.memory_usage(deep=True).sum() / 1024 ** 2, 1),
         })
     return pd.DataFrame(rows)
+
+
+def read_upload(f):
+    """업로드된 파일 하나를 읽는다. data/ 의 파일은 건드리지 않는다.
+
+    올린 것은 세션에만 둔다 — 배포본은 여러 사람이 같은 서버를 본다.
+    한 사람이 올린 깨진 파일이 원본을 덮으면 다른 사람의 화면까지 바뀐다.
+    """
+    import io
+    name = f.name.rsplit(".", 1)[0]
+    raw = f.getvalue()
+    if f.name.endswith(".parquet"):
+        return name, _cast_dates(pd.read_parquet(io.BytesIO(raw)))
+    if f.name.endswith(".xlsx"):
+        return name, _cast_dates(pd.read_excel(io.BytesIO(raw)))
+    for enc in ("utf-8", "utf-8-sig", "cp949"):
+        try:
+            return name, _cast_dates(pd.read_csv(io.BytesIO(raw), encoding=enc))
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("csv", b"", 0, 1, f"{f.name} 인코딩을 못 읽었다")

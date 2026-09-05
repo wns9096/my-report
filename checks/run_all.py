@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 STEPS = [
     ("Day1 실습 E — 깨뜨려 보기 (차단·버튼 잠김)", "checks/day1_break.py"),
+    ("Day1 — 배포본에서 깨뜨려 보기 (화면 버튼)", "checks/sandbox_break.py"),
     ("Day2 실습 B — 손계산 대조", "checks/day2_crosscheck.py"),
     ("Day3 실습 B·C — 감추기와 판정 순서", "checks/day3_trust.py"),
     ("Day4 실습 B — 인과 표현 검사", "checks/day4_phrasing.py"),

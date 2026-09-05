@@ -22,7 +22,20 @@ def stamp():
     return "|".join(parts)
 
 
+OVERRIDE = "sandbox_tables"
+
+
 def load():
+    """원본을 읽는다. 다만 이 세션이 시험용 데이터를 얹어 두었으면 그것을 쓴다.
+
+    시험용은 세션에만 있다. data/ 의 파일은 절대 건드리지 않는다 —
+    배포본은 여러 사람이 같은 서버를 보므로, 한 사람이 넣은 깨진 파일이
+    원본을 덮으면 다른 사람의 화면까지 바뀐다.
+    """
+    over = st.session_state.get(OVERRIDE)
+    if over:
+        tables = over["tables"]
+        return context.build(tables), tables, []
     tables, missing = loader.load_all(stamp())
     ctx = context.build(tables) if tables and not missing else None
     return ctx, tables, missing
