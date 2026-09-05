@@ -1,0 +1,12 @@
+# 비밀번호는 코드에 절대 쓰지 않는다. st.secrets 로 읽고, 파일은 올리지 않는다.
+.streamlit/secrets.toml
+
+__pycache__/
+*.pyc
+
+# 산출물은 다시 만들면 된다. 다만 게이트 기록은 근거라서 남긴다.
+fonts/*.ttf
+
+outputs/*.png
+outputs/*.pdf
+!outputs/gates.jsonl

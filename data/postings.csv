@@ -1,0 +1,241 @@
+﻿posting_id,company,role,employment_type,industry,has_test,competition
+P0001,회사22,Product Analyst,신입,물류,True,0.277
+P0002,회사20,Product Analyst,신입,게임,True,0.351
+P0003,회사28,BA (Business Analyst),전환형 인턴,교육,True,0.255
+P0004,회사19,BA (Business Analyst),신입,교육,False,0.095
+P0005,회사11,Growth Analyst,경력,,False,0.375
+P0006,회사24,Growth Analyst,신입,물류,True,0.451
+P0007,회사14,BA (Business Analyst),전환형 인턴,경영 컨설팅,False,0.403
+P0008,회사12,BA (Business Analyst),신입,게임,False,0.712
+P0009,회사20,BA (Business Analyst),경력,물류,True,0.262
+P0010,회사14,BA (Business Analyst),경력,배달/배송,False,0.234
+P0011,회사27,Product Analyst,신입,,False,0.337
+P0012,회사16,Growth Analyst,경력,금융,False,0.336
+P0013,회사16,Growth Analyst,전환형 인턴,헬스케어,True,0.828
+P0014,회사34,BI Engineer,신입,금융,False,0.344
+P0015,회사11,Data Scientist,신입,모바일·APP,True,0.564
+P0016,회사22,Data Scientist,경력,게임,False,0.244
+P0017,회사20,BA (Business Analyst),신입,헬스케어,True,0.435
+P0018,회사24,BI Engineer,계약직,리테일,True,0.53
+P0019,회사17,Growth Analyst,인턴,모바일·APP,False,0.325
+P0020,회사21,Data Scientist,인턴,리테일,True,0.885
+P0021,회사14,BI Engineer,신입,경영 컨설팅,False,0.544
+P0022,회사29,Data Scientist,신입,,False,0.268
+P0023,회사11,Growth Analyst,신입,헬스케어,False,0.361
+P0024,회사11,BI Engineer,전환형 인턴,게임,True,0.483
+P0025,회사29,DA (Data Analyst),인턴,리테일,False,0.688
+P0026,회사26,DA (Data Analyst),신입,금융,True,0.358
+P0027,회사15,DA (Data Analyst),신입,물류,False,0.508
+P0028,회사11,BI Engineer,경력,모바일·APP,False,0.532
+P0029,회사18,Product Analyst,신입,게임,True,0.893
+P0030,회사13,DA (Data Analyst),신입,배달/배송,False,0.324
+P0031,회사27,BI Engineer,신입,물류,False,0.129
+P0032,회사33,Growth Analyst,인턴,,False,0.539
+P0033,회사14,BA (Business Analyst),전환형 인턴,금융,True,0.122
+P0034,회사05,BA (Business Analyst),인턴,리테일,True,0.753
+P0035,회사19,Data Scientist,인턴,물류,False,0.329
+P0036,회사31,DA (Data Analyst),경력,,False,0.787
+P0037,회사23,BA (Business Analyst),경력,모바일·APP,False,0.206
+P0038,회사11,Product Analyst,신입,,False,0.428
+P0039,회사23,Product Analyst,인턴,모바일·APP,False,0.643
+P0040,회사30,BA (Business Analyst),신입,,False,0.684
+P0041,회사33,Product Analyst,경력,헬스케어,False,0.841
+P0042,회사19,Data Scientist,경력,헬스케어,False,0.364
+P0043,회사12,BI Engineer,인턴,리테일,False,0.201
+P0044,회사22,BI Engineer,계약직,경영 컨설팅,True,0.425
+P0045,회사11,Product Analyst,인턴,경영 컨설팅,False,0.359
+P0046,회사25,Growth Analyst,전환형 인턴,미디어,False,0.255
+P0047,회사22,BI Engineer,경력,금융,False,0.447
+P0048,회사12,Growth Analyst,신입,교육,False,0.803
+P0049,회사30,DA (Data Analyst),계약직,물류,True,0.476
+P0050,회사14,BA (Business Analyst),신입,미디어,False,0.673
+P0051,회사28,Data Scientist,신입,물류,True,0.349
+P0052,회사12,Data Scientist,인턴,교육,True,0.294
+P0053,회사31,BA (Business Analyst),경력,헬스케어,False,0.732
+P0054,회사11,Growth Analyst,인턴,물류,False,0.687
+P0055,회사30,BA (Business Analyst),경력,리테일,True,0.789
+P0056,회사20,Growth Analyst,인턴,물류,False,0.858
+P0057,회사11,DA (Data Analyst),경력,헬스케어,False,0.623
+P0058,회사26,BA (Business Analyst),계약직,경영 컨설팅,True,0.39
+P0059,회사23,Product Analyst,신입,물류,True,0.485
+P0060,회사23,BI Engineer,신입,물류,False,0.646
+P0061,회사11,Growth Analyst,신입,게임,False,0.474
+P0062,회사21,Data Scientist,경력,경영 컨설팅,False,0.677
+P0063,회사13,DA (Data Analyst),신입,게임,False,0.303
+P0064,회사27,Growth Analyst,경력,헬스케어,False,0.185
+P0065,회사21,BI Engineer,계약직,모바일·APP,False,0.72
+P0066,회사11,Product Analyst,경력,게임,False,0.527
+P0067,회사25,BA (Business Analyst),전환형 인턴,미디어,False,0.735
+P0068,회사24,BI Engineer,계약직,리테일,False,0.33
+P0069,회사34,BI Engineer,계약직,리테일,True,0.443
+P0070,회사29,Growth Analyst,계약직,교육,True,0.966
+P0071,회사33,Growth Analyst,신입,,True,0.373
+P0072,회사32,DA (Data Analyst),인턴,교육,False,0.286
+P0073,회사27,BA (Business Analyst),인턴,,True,0.771
+P0074,회사20,BI Engineer,신입,배달/배송,True,0.868
+P0075,회사10,Product Analyst,신입,교육,True,0.619
+P0076,회사24,DA (Data Analyst),신입,헬스케어,True,0.796
+P0077,회사15,BA (Business Analyst),경력,,True,0.519
+P0078,회사19,Product Analyst,경력,,False,0.36
+P0079,회사08,Growth Analyst,신입,게임,False,0.513
+P0080,회사19,Growth Analyst,경력,게임,True,0.996
+P0081,회사34,DA (Data Analyst),계약직,교육,True,0.335
+P0082,회사27,DA (Data Analyst),경력,헬스케어,True,0.646
+P0083,회사22,BI Engineer,경력,배달/배송,False,0.268
+P0084,회사20,Product Analyst,경력,,True,0.052
+P0085,회사26,DA (Data Analyst),경력,물류,False,0.219
+P0086,회사18,BI Engineer,경력,교육,False,0.281
+P0087,회사03,Product Analyst,신입,헬스케어,True,0.463
+P0088,회사01,Product Analyst,신입,경영 컨설팅,True,0.584
+P0089,회사19,DA (Data Analyst),신입,모바일·APP,False,0.032
+P0090,회사15,DA (Data Analyst),신입,모바일·APP,True,0.597
+P0091,회사11,Data Scientist,신입,금융,False,0.357
+P0092,회사25,Product Analyst,전환형 인턴,헬스케어,True,0.47
+P0093,회사12,DA (Data Analyst),신입,배달/배송,False,0.271
+P0094,회사19,BI Engineer,신입,금융,True,0.748
+P0095,회사25,Product Analyst,계약직,물류,False,0.762
+P0096,회사27,BI Engineer,신입,,False,0.429
+P0097,회사23,Growth Analyst,신입,모바일·APP,True,0.327
+P0098,회사11,Data Scientist,신입,게임,False,0.114
+P0099,회사26,BA (Business Analyst),경력,물류,False,0.66
+P0100,회사34,BI Engineer,계약직,헬스케어,True,0.313
+P0101,회사18,BA (Business Analyst),신입,,False,0.295
+P0102,회사24,BI Engineer,전환형 인턴,리테일,True,0.804
+P0103,회사33,DA (Data Analyst),신입,모바일·APP,True,0.529
+P0104,회사27,DA (Data Analyst),신입,모바일·APP,False,0.385
+P0105,회사31,Product Analyst,경력,모바일·APP,True,0.751
+P0106,회사16,Data Scientist,신입,물류,True,0.361
+P0107,회사25,BA (Business Analyst),인턴,미디어,False,0.207
+P0108,회사14,BA (Business Analyst),경력,교육,False,0.626
+P0109,회사32,BA (Business Analyst),전환형 인턴,배달/배송,True,0.508
+P0110,회사30,Product Analyst,신입,배달/배송,False,0.627
+P0111,회사29,Product Analyst,신입,배달/배송,False,0.598
+P0112,회사31,BI Engineer,경력,경영 컨설팅,True,0.635
+P0113,회사11,Data Scientist,전환형 인턴,배달/배송,True,0.72
+P0114,회사27,Growth Analyst,전환형 인턴,모바일·APP,True,0.22
+P0115,회사31,BA (Business Analyst),전환형 인턴,경영 컨설팅,True,0.519
+P0116,회사32,BA (Business Analyst),전환형 인턴,금융,True,0.324
+P0117,회사19,BI Engineer,신입,,False,0.344
+P0118,회사20,BI Engineer,전환형 인턴,미디어,True,0.237
+P0119,회사13,Product Analyst,신입,리테일,False,0.465
+P0120,회사26,DA (Data Analyst),신입,게임,False,0.691
+P0121,회사13,Growth Analyst,신입,금융,False,0.438
+P0122,회사21,Product Analyst,전환형 인턴,,True,0.228
+P0123,회사20,Product Analyst,경력,배달/배송,True,0.135
+P0124,회사18,DA (Data Analyst),경력,,False,0.614
+P0125,회사32,DA (Data Analyst),신입,게임,False,0.556
+P0126,회사16,Growth Analyst,신입,경영 컨설팅,True,0.66
+P0127,회사06,Product Analyst,신입,리테일,False,0.846
+P0128,회사26,Data Scientist,경력,게임,False,0.582
+P0129,회사17,Growth Analyst,신입,경영 컨설팅,True,0.573
+P0130,회사13,Product Analyst,전환형 인턴,물류,False,0.469
+P0131,회사24,BI Engineer,경력,미디어,True,0.535
+P0132,회사21,DA (Data Analyst),계약직,금융,False,0.533
+P0133,회사13,Data Scientist,신입,헬스케어,True,0.39
+P0134,회사23,Growth Analyst,전환형 인턴,배달/배송,True,0.471
+P0135,회사20,Product Analyst,인턴,,False,0.589
+P0136,회사12,Growth Analyst,신입,모바일·APP,False,0.617
+P0137,회사23,Product Analyst,신입,모바일·APP,False,0.761
+P0138,회사11,BI Engineer,신입,물류,True,0.588
+P0139,회사28,Growth Analyst,경력,교육,False,0.643
+P0140,회사20,Growth Analyst,경력,모바일·APP,False,0.608
+P0141,회사13,BA (Business Analyst),전환형 인턴,헬스케어,True,0.692
+P0142,회사15,BI Engineer,경력,교육,True,0.634
+P0143,회사23,Product Analyst,인턴,교육,False,0.506
+P0144,회사12,BA (Business Analyst),계약직,배달/배송,True,0.742
+P0145,회사28,Growth Analyst,신입,,True,0.771
+P0146,회사21,Product Analyst,경력,게임,True,0.705
+P0147,회사20,BA (Business Analyst),전환형 인턴,게임,False,0.579
+P0148,회사11,DA (Data Analyst),인턴,배달/배송,False,0.668
+P0149,회사13,DA (Data Analyst),계약직,리테일,True,0.337
+P0150,회사04,Growth Analyst,경력,배달/배송,False,0.463
+P0151,회사11,Data Scientist,신입,게임,False,0.712
+P0152,회사17,BA (Business Analyst),경력,물류,True,0.797
+P0153,회사23,BA (Business Analyst),경력,교육,False,0.324
+P0154,회사34,BA (Business Analyst),경력,미디어,False,0.532
+P0155,회사19,Product Analyst,신입,모바일·APP,False,0.073
+P0156,회사22,BA (Business Analyst),계약직,헬스케어,True,0.445
+P0157,회사17,Growth Analyst,전환형 인턴,모바일·APP,False,0.596
+P0158,회사07,BA (Business Analyst),신입,금융,False,0.883
+P0159,회사17,Data Scientist,신입,경영 컨설팅,True,0.492
+P0160,회사14,Data Scientist,전환형 인턴,배달/배송,False,0.59
+P0161,회사21,DA (Data Analyst),신입,리테일,False,0.623
+P0162,회사19,DA (Data Analyst),신입,리테일,True,0.5
+P0163,회사29,DA (Data Analyst),신입,모바일·APP,False,0.382
+P0164,회사31,DA (Data Analyst),경력,금융,False,0.705
+P0165,회사16,Data Scientist,신입,물류,False,0.499
+P0166,회사24,Growth Analyst,신입,헬스케어,False,0.198
+P0167,회사12,DA (Data Analyst),신입,리테일,True,0.651
+P0168,회사26,Data Scientist,경력,미디어,False,0.284
+P0169,회사14,Data Scientist,경력,리테일,False,0.385
+P0170,회사26,Growth Analyst,경력,게임,True,0.449
+P0171,회사31,Product Analyst,계약직,경영 컨설팅,False,0.312
+P0172,회사26,BI Engineer,경력,경영 컨설팅,False,0.292
+P0173,회사33,DA (Data Analyst),계약직,배달/배송,False,0.64
+P0174,회사25,BI Engineer,인턴,금융,False,0.678
+P0175,회사22,Data Scientist,신입,금융,True,0.291
+P0176,회사23,DA (Data Analyst),인턴,경영 컨설팅,False,0.122
+P0177,회사22,Growth Analyst,경력,경영 컨설팅,False,0.24
+P0178,회사21,Data Scientist,계약직,물류,True,0.8
+P0179,회사26,Product Analyst,계약직,금융,False,0.346
+P0180,회사17,DA (Data Analyst),계약직,,False,0.693
+P0181,회사12,BA (Business Analyst),신입,,False,0.697
+P0182,회사12,Data Scientist,인턴,금융,False,0.538
+P0183,회사11,Product Analyst,인턴,,False,0.614
+P0184,회사28,DA (Data Analyst),전환형 인턴,게임,False,0.727
+P0185,회사11,DA (Data Analyst),전환형 인턴,물류,False,0.606
+P0186,회사17,Product Analyst,신입,헬스케어,False,0.082
+P0187,회사19,BI Engineer,경력,금융,False,0.144
+P0188,회사09,BI Engineer,신입,교육,False,0.653
+P0189,회사12,Product Analyst,신입,미디어,False,0.451
+P0190,회사31,Growth Analyst,전환형 인턴,,False,0.652
+P0191,회사22,BI Engineer,신입,,True,0.769
+P0192,회사30,Growth Analyst,신입,헬스케어,False,0.585
+P0193,회사23,BA (Business Analyst),인턴,게임,False,0.297
+P0194,회사32,BI Engineer,신입,금융,False,0.559
+P0195,회사28,Product Analyst,신입,물류,False,0.509
+P0196,회사11,BI Engineer,계약직,리테일,True,0.721
+P0197,회사12,Data Scientist,신입,리테일,True,0.624
+P0198,회사22,BA (Business Analyst),계약직,게임,False,0.186
+P0199,회사21,BA (Business Analyst),경력,물류,False,0.38
+P0200,회사27,DA (Data Analyst),신입,금융,False,0.541
+P0201,회사33,BA (Business Analyst),경력,물류,False,0.643
+P0202,회사16,Product Analyst,신입,경영 컨설팅,True,0.698
+P0203,회사17,DA (Data Analyst),경력,물류,True,0.356
+P0204,회사31,DA (Data Analyst),인턴,교육,False,0.488
+P0205,회사17,Product Analyst,경력,게임,False,0.624
+P0206,회사21,BI Engineer,경력,,True,0.636
+P0207,회사12,Growth Analyst,신입,게임,False,0.094
+P0208,회사19,DA (Data Analyst),전환형 인턴,금융,False,0.323
+P0209,회사19,BA (Business Analyst),신입,금융,False,0.495
+P0210,회사26,Growth Analyst,신입,,False,0.487
+P0211,회사11,Product Analyst,경력,경영 컨설팅,False,0.917
+P0212,회사25,BI Engineer,신입,모바일·APP,True,0.374
+P0213,회사19,BI Engineer,신입,물류,False,0.274
+P0214,회사22,BA (Business Analyst),계약직,,True,0.872
+P0215,회사28,BA (Business Analyst),전환형 인턴,물류,False,0.578
+P0216,회사17,BA (Business Analyst),경력,모바일·APP,True,0.748
+P0217,회사34,BA (Business Analyst),전환형 인턴,미디어,True,0.646
+P0218,회사15,DA (Data Analyst),신입,미디어,False,0.337
+P0219,회사27,Product Analyst,인턴,미디어,False,0.142
+P0220,회사22,DA (Data Analyst),인턴,리테일,False,0.444
+P0221,회사32,Growth Analyst,계약직,교육,True,0.758
+P0222,회사17,Product Analyst,경력,,True,0.767
+P0223,회사13,Growth Analyst,경력,미디어,True,0.49
+P0224,회사16,Growth Analyst,신입,,True,0.203
+P0225,회사33,Data Scientist,경력,헬스케어,True,0.372
+P0226,회사34,Growth Analyst,전환형 인턴,리테일,True,0.192
+P0227,회사02,Data Scientist,신입,게임,False,0.357
+P0228,회사31,Growth Analyst,경력,헬스케어,True,0.706
+P0229,회사18,Data Scientist,계약직,배달/배송,False,0.652
+P0230,회사13,DA (Data Analyst),경력,물류,False,0.366
+P0231,회사19,Product Analyst,전환형 인턴,금융,False,0.75
+P0232,회사17,BI Engineer,신입,물류,False,0.916
+P0233,회사18,BA (Business Analyst),신입,게임,False,0.295
+P0234,회사29,Product Analyst,인턴,,True,0.727
+P0235,회사12,Product Analyst,인턴,헬스케어,False,0.884
+P0236,회사26,BA (Business Analyst),신입,리테일,False,0.631
+P0237,회사23,Data Scientist,신입,경영 컨설팅,False,0.441
+P0238,회사25,BI Engineer,전환형 인턴,금융,False,0.253
+P0239,회사28,Product Analyst,계약직,모바일·APP,True,0.718
+P0240,회사11,Data Scientist,신입,교육,True,0.368

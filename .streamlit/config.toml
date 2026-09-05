@@ -1,0 +1,12 @@
+# 테마는 코드에 박지 않는다. 여기 하나에서 온다 (9주차 배포 전 준비).
+# 판정 색(정상·주의·차단)은 여기가 아니라 core/config.py 의 COLORS 다 —
+# 그쪽은 «의미»이고 이쪽은 «외관»이다. 섞으면 테마를 바꿀 때 판정이 흔들린다.
+[theme]
+base = "light"
+primaryColor = "#2F4F6F"
+font = "sans serif"
+
+[server]
+# data/ 를 고쳐도 앱이 멋대로 다시 뜨지 않게 한다.
+# 깨진 파일을 일부러 넣어 보는 실습에서 리런이 겹치면 무엇이 걸렸는지 못 본다.
+runOnSave = false
