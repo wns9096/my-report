@@ -9,6 +9,13 @@ shell.topbar()
 shell.sidebar()
 st.subheader("아카이브 · 게이트 통과 기록")
 
+if gates.is_ephemeral():
+    st.warning(
+        "▲ **여기 남긴 기록은 앱이 다시 뜨면 사라집니다.** 배포처의 파일계는 "
+        "다시 뜰 때 초기화됩니다. 저장소에 커밋된 기록만 남아 있습니다.\n\n"
+        "판단 기록이 이 앱의 핵심 산출물이므로, 실제로 쓰려면 보관처를 "
+        "밖으로 빼야 합니다 — 9주차에 할 일입니다.")
+
 rows = gates.history()
 if not rows:
     st.info("★ 아직 통과 기록이 없습니다. 실행 화면에서 게이트 1을 통과시키면 "

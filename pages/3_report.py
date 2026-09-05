@@ -146,10 +146,19 @@ st.divider()
 st.markdown("#### PDF")
 if st.button("PDF 만들기", key="mk_pdf"):
     with st.status("PDF 만드는 중", expanded=False) as s:
-        st.write("차트 3개를 그린다")
-        p = pdfmod.build_pdf(sections, ctx, warnings_=hits)
-        s.update(label=f"{p.name} — {p.stat().st_size / 1024:.0f} KB",
-                 state="complete")
+        try:
+            st.write("한글 폰트를 찾는다")
+            pdfmod.find_font()
+            st.write("차트 3개를 그린다")
+            p = pdfmod.build_pdf(sections, ctx, warnings_=hits)
+            s.update(label=f"{p.name} — {p.stat().st_size / 1024:.0f} KB",
+                     state="complete")
+        except pdfmod.FontMissing as e:
+            # 화면을 죽이지 않는다. PDF 만 못 만들고 나머지는 그대로 쓴다.
+            s.update(label="PDF를 만들지 않았다 — 한글 폰트가 없다", state="error")
+            st.error(f"✕ {e}")
+            st.caption("폰트 없이 만들면 한글이 전부 네모로 나오는데, 그건 "
+                       "파일을 열어 보기 전에는 모른다. 그래서 만들지 않는다.")
 p = config.OUT / "report.pdf"
 if p.exists():
     st.download_button("PDF 내려받기", p.read_bytes(), file_name=p.name,

@@ -55,3 +55,16 @@ def passed(gate: int) -> dict | None:
     """가장 최근 통과 기록. 없으면 None."""
     rows = [r for r in history() if r["gate"] == gate]
     return rows[-1] if rows else None
+
+
+def is_ephemeral():
+    """이 기록이 재부팅하면 사라지는 자리에 있는가.
+
+    Streamlit Community Cloud 는 저장소를 /mount/src 아래에 풀고, 그 파일계는
+    앱이 다시 뜰 때 초기화된다. 게이트 기록은 «사람이 판단한 것»이라 이 앱의
+    핵심 산출물인데, 배포본에서 남긴 기록은 남지 않는다.
+
+    말하지 않으면 사람은 저장됐다고 생각한다. 그래서 화면에 적는다.
+    9주차에 진짜 보관처(DB·시트)로 옮길 자리이기도 하다.
+    """
+    return str(config.ROOT).startswith("/mount/src")

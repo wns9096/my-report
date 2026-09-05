@@ -28,22 +28,31 @@ FONT_CANDIDATES = [
 ]
 
 
-def _pick_font():
-    """찾은 첫 짝을 쓴다. 하나도 없으면 조용히 네모로 찍지 말고 여기서 멈춘다.
+class FontMissing(RuntimeError):
+    """한글 폰트를 못 찾았다. PDF 만 못 만들고, 나머지 화면은 살아 있어야 한다."""
 
-    폰트가 없으면 한글이 전부 네모로 나오는데, 그건 PDF 를 열어 보기 전에는
-    모른다. 만들어진 파일이 있으면 사람은 됐다고 생각한다.
+
+def find_font():
+    """찾은 첫 짝을 돌려준다. 하나도 없으면 예외로 알린다.
+
+    ★ 이 함수를 import 할 때 부르면 안 된다.
+      처음에는 모듈 맨 위에서 FONT_REG = _pick_font() 로 잡아 뒀는데,
+      그러면 폰트가 없는 곳에서 리포트 «화면 전체»가 임포트 단계에서 죽는다.
+      화요일에 배운 것과 같은 실수다 — 차단으로 멈추는 것과 에러로 죽는 것은
+      다르다. 죽으면 사람이 판단할 화면 자체가 없다.
+      그래서 PDF 를 만들 때 부른다. 못 찾으면 그 버튼만 안 되고 나머지는 산다.
+
+    조용히 넘기지도 않는다. 폰트가 없으면 한글이 전부 네모로 나오는데,
+    그건 PDF 를 열어 보기 전에는 모른다 — 파일이 만들어졌다는 사실이
+    사람을 안심시킨다.
     """
     for reg, bold in FONT_CANDIDATES:
         if reg.exists():
             return reg, (bold if bold.exists() else reg)
-    raise FileNotFoundError(
+    raise FontMissing(
         "한글 폰트를 못 찾았다. fonts/ 에 NanumGothic.ttf 를 넣거나, "
-        "리눅스면 packages.txt 의 fonts-nanum 이 설치됐는지 보십시오. "
+        "리눅스면 packages.txt 의 fonts-nanum 이 깔렸는지 보십시오. "
         f"찾아본 곳: {[str(r) for r, _ in FONT_CANDIDATES]}")
-
-
-FONT_REG, FONT_BOLD = _pick_font()
 
 
 def _rgb(key):
@@ -53,8 +62,9 @@ def _rgb(key):
 
 
 def _setup_mpl():
-    fm.fontManager.addfont(str(FONT_REG))
-    name = fm.FontProperties(fname=str(FONT_REG)).get_name()
+    reg, _ = find_font()
+    fm.fontManager.addfont(str(reg))
+    name = fm.FontProperties(fname=str(reg)).get_name()
     plt.rcParams["font.family"] = name
     plt.rcParams["axes.unicode_minus"] = False
     return name
@@ -169,6 +179,7 @@ class Doc(FPDF):
 
 def build_pdf(sections: dict, ctx, out_path=None, warnings_=None):
     out_path = out_path or (config.OUT / "report.pdf")
+    find_font()          # 없으면 차트를 그리기 전에 멈춘다. 반쪽짜리를 남기지 않는다
     charts_ = {
         "4. 결과": [
             _funnel_png(ctx["funnel"], config.OUT / "_c_funnel.png",
@@ -180,9 +191,10 @@ def build_pdf(sections: dict, ctx, out_path=None, warnings_=None):
         ],
     }
 
+    reg, bold = find_font()
     pdf = Doc()
-    pdf.add_font("KO", "", str(FONT_REG))
-    pdf.add_font("KO", "B", str(FONT_BOLD))
+    pdf.add_font("KO", "", str(reg))
+    pdf.add_font("KO", "B", str(bold))
     pdf.set_auto_page_break(True, margin=18)
     pdf.add_page()
 
