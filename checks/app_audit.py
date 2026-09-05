@@ -15,6 +15,7 @@
   11 카드를 직접 쓴 HTML 로 그리지 않는가   테마가 바뀌면 그 부분만 색이 남는다
   12 근거에 «무엇에서 온 값인지»가 있는가   "적당해서"는 근거가 아니다
   13 저장소에 재배포 못 하는 파일이 없는가  폰트·비밀번호는 올리면 안 된다
+  14 배포 설정 파일이 그 형식대로인가       packages.txt 는 주석을 못 읽는다
 """
 import re
 import sys
@@ -276,6 +277,38 @@ def r13_no_redistributable():
                 else "폰트는 packages.txt 로 깔고, secrets 는 .gitignore 에 있다")
 
 
+# apt 패키지 이름에 쓸 수 있는 글자. 데비안 정책상 소문자·숫자와 + - . 뿐이다.
+APT_NAME = re.compile(r"^[a-z0-9][a-z0-9+.-]*$")
+
+
+def r14_deploy_files():
+    """배포 설정 파일이 그 형식이 읽을 수 있는 것만 담고 있는가.
+
+    ★ 실제로 여기서 배포가 죽었다.
+      packages.txt 에 «# 배포처(리눅스)에 한글 폰트를 깐다» 같은 주석을 달았는데,
+      이 파일은 주석을 모른다 — 모든 줄을 그대로 apt-get 에 넘긴다.
+      그래서 낱말 하나하나가 패키지 이름이 되어 40줄짜리 에러가 났다.
+
+      requirements.txt(pip) 는 «#» 을 주석으로 읽는다. 둘이 나란히 있어서
+      같은 규칙일 것이라고 생각했다 — 형식이 비슷하게 생겼다는 것은 근거가 아니다.
+      설명은 fonts/README.md 로 옮겼다.
+    """
+    bad = []
+    pkg = ROOT / "packages.txt"
+    if pkg.exists():
+        for i, line in enumerate(pkg.read_text(encoding="utf-8").splitlines(), 1):
+            s = line.strip()
+            if not s:
+                continue
+            if not APT_NAME.match(s):
+                bad.append(f"packages.txt:{i} «{s[:30]}» 는 apt 패키지 이름이 아니다")
+    return note("14 배포 설정 파일 형식", not bad,
+                "; ".join(bad) if bad
+                else f"packages.txt 는 패키지 이름만 담는다 "
+                     f"({pkg.read_text(encoding='utf-8').split() if pkg.exists() else []})")
+
+
+
 def main():
     tables = load()
     ctx = context.build(tables)
@@ -294,6 +327,7 @@ def main():
     r11_no_raw_html()
     r12_reason_kind()
     r13_no_redistributable()
+    r14_deploy_files()
 
     width = max(len(f["규칙"]) for f in FINDINGS)
     print()

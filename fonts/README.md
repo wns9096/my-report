@@ -14,3 +14,19 @@
 하나도 못 찾으면 PDF 를 만들지 않고 멈춘다.
 폰트가 없으면 한글이 전부 네모로 나오는데, 그건 파일을 열어 보기 전에는
 모른다 — 파일이 만들어졌다는 사실이 사람을 안심시킨다.
+
+## packages.txt 에는 주석을 달지 마라
+
+`packages.txt` 는 **모든 줄을 그대로 `apt-get install` 에 넘긴다.** 주석을 모른다.
+`#` 으로 시작하는 설명을 달았다가 낱말 하나하나가 패키지 이름이 되어 배포가 죽었다.
+
+```
+E: Unable to locate package 배포처(리눅스)에
+E: Unable to locate package 한글
+E: Unable to locate package 폰트를
+```
+
+나란히 있는 `requirements.txt`(pip)는 `#` 을 주석으로 읽는다.
+**형식이 비슷하게 생겼다는 것은 근거가 아니다.**
+그래서 설명은 이 파일에 두고, `packages.txt` 에는 패키지 이름만 남겼다.
+`checks/app_audit.py` 규칙 14가 계속 본다.
