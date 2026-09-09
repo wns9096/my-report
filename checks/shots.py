@@ -24,19 +24,24 @@ OUT = ROOT / "docs" / "shots"
 PORT = 8877
 BASE = f"http://localhost:{PORT}"
 
-# (파일명, 열 경로, 이 글자가 보이게 스크롤, 설명)
+# (파일명, 열 경로, 누를 탭, 이 글자가 보이게 스크롤, 설명)
 # 픽셀로 스크롤하면 화면을 조금만 고쳐도 엉뚱한 데를 찍는다. 글자를 기준으로 잡는다.
 SHOTS = [
-    ("1_run.png", "/", None, "실행 — 검증과 게이트 1"),
-    ("2_dashboard.png", "/dashboard", None, "대시보드 — 지표와 월별 추이"),
-    ("2_funnel.png", "/dashboard", "획득 퍼널", "퍼널 — 병목 한 칸만 강조"),
-    ("2_decomp.png", "/dashboard", "분해", "분해 — 감춘 칸은 값을 안 그린다"),
-    ("2_verdict.png", "/dashboard", "게이트 2 · 출구", "판정과 게이트 2"),
-    ("3_report.png", "/report", None, "리포트 — 사람이 쓰는 장과 인과 검사"),
-    ("4_archive.png", "/archive", None, "아카이브 — 게이트 통과 기록"),
+    ("1_run.png", "/", None, None, "실행 — 검증과 게이트 1"),
+    ("2_dashboard.png", "/dashboard", None, None, "대시보드 — 지표와 월별 추이"),
+    ("2_funnel.png", "/dashboard", None, "획득 퍼널", "퍼널 — 병목 한 칸만 강조"),
+    ("2_decomp.png", "/dashboard", None, "분해", "분해 — 감춘 칸은 값을 안 그린다"),
+    ("2_verdict.png", "/dashboard", None, "게이트 2 · 출구", "판정과 게이트 2"),
+    ("3_report.png", "/report", None, None, "리포트 — 사람이 쓰는 장과 인과 검사"),
+    # 9주차 Day2 — 제안서는 탭 안에 있다. 탭은 눌러야 보인다.
+    ("3_proposal.png", "/report", "제안서 (임시)", None,
+     "제안서 — 자동 절과 사람 절이 배지로 갈린다"),
+    ("3_proposal_human.png", "/report", "제안서 (임시)", "후보 — 자동으로",
+     "적용 — 후보는 자동, 고르는 것은 사람"),
+    ("4_archive.png", "/archive", None, None, "아카이브 — 게이트 통과 기록"),
     # 깨뜨리기는 맨 마지막에 찍는다. 시험용 데이터가 세션에 남아
     # 뒤 화면까지 물들이기 때문이다.
-    ("1_break.png", "/", None, "깨뜨려 보기 — 차단이 뜨고 통과 버튼이 잠긴다"),
+    ("1_break.png", "/", None, None, "깨뜨려 보기 — 차단이 뜨고 통과 버튼이 잠긴다"),
 ]
 
 
@@ -61,9 +66,18 @@ def main():
             b = pw.chromium.launch()
             page = b.new_page(viewport={"width": 1440, "height": 1000},
                               device_scale_factor=2)
-            for name, path, scroll, label in SHOTS:
+            for name, path, tab, scroll, label in SHOTS:
                 page.goto(BASE + path)
                 _wait(page)
+                if tab:
+                    # 탭은 role=tab 이다. 누르지 않으면 첫 탭만 보인다 —
+                    # 탭 몸통은 둘 다 실행되지만 «보이는» 것은 하나다.
+                    page.get_by_role("tab", name=tab).click()
+                    page.wait_for_timeout(1500)
+                if name == "3_proposal_human.png":
+                    # 사람이 쓰는 절을 골라야 입력창이 뜬다. 목차 라디오로 고른다.
+                    page.get_by_text("적용", exact=True).first.click()
+                    page.wait_for_timeout(1500)
                 if name == "1_break.png":
                     # 깨뜨려 보기 자리를 펴고 첫 버튼을 실제로 누른다.
                     # expander 는 <details><summary> 라 summary 를 눌러야 한다.

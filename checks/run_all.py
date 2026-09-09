@@ -8,6 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+# 출력이 한글이다. cp949 콘솔(예: cmd.exe)에서 그대로 찍으면
+# UnicodeEncodeError 로 죽는다 — 검사가 아니고 출력이 이유로 죽는 것은
+# 맨 머리에서 막는다. 사람이 결과를 볼 수 없으면 검사를 돌린 것이 아니다.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, OSError):
+    pass
+
 ROOT = Path(__file__).resolve().parent.parent
 
 STEPS = [
@@ -20,6 +28,7 @@ STEPS = [
     ("4개 화면이 열리는가", "checks/ui_smoke.py"),
     ("앱점검 — 나흘치 규칙을 앱이 지키는가", "checks/app_audit.py"),
     ("9주차 Day1 — 발견.md 의 숫자가 조회값과 같은가", "checks/w9d1_verify.py"),
+    ("9주차 Day2 — 제안서의 자동/사람 분리와 카드 대조", "checks/w9d2_proposal.py"),
 ]
 
 

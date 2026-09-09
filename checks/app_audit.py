@@ -16,6 +16,7 @@
   12 근거에 «무엇에서 온 값인지»가 있는가   "적당해서"는 근거가 아니다
   13 저장소에 재배포 못 하는 파일이 없는가  폰트·비밀번호는 올리면 안 된다
   14 배포 설정 파일이 그 형식대로인가       packages.txt 는 주석을 못 읽는다
+  15 제안서도 자동/사람이 갈려 있는가       새 파일은 지난 주 규칙을 모른다
 """
 import re
 import sys
@@ -308,6 +309,39 @@ def r14_deploy_files():
                      f"({pkg.read_text(encoding='utf-8').split() if pkg.exists() else []})")
 
 
+def r15_proposal_split():
+    """제안서도 리포트와 같은 원칙으로 나뉘어 있는가 (9주차 Day2).
+
+    규칙 4는 리포트의 사람이 쓰는 장을 봤다. 제안서는 다른 파일이라 규칙 4가
+    닿지 않는다 — 도구가 안 건드린 곳은 안 본다. 그래서 같은 것을 여기서도 본다.
+
+    셋을 본다.
+      · 사람이 쓰는 절을 비워 두면 정말 비어 있는가 (자동으로 안 채우는가)
+      · 화면이 kind 로 분기하는가. 제목으로 분기하면 절이 늘 때 화면도 고쳐야 한다
+      · 인과 표현 검사를 새로 만들지 않고 재사용했는가
+    """
+    from report import proposal as PR
+    bad = []
+
+    secs = PR.build(PR.load_cards(), human=None)
+    for s in secs:
+        if s["kind"] == "human" and s["body"] != S.NOT_WRITTEN:
+            bad.append(f"«{s['title']}» 를 안 썼는데 본문이 채워졌다")
+    if not [s for s in secs if s["kind"] == "human"]:
+        bad.append("사람이 쓰는 절이 하나도 없다 — 전부 자동이면 책임의 주체가 없다")
+
+    src = (ROOT / "screens" / "3_report.py").read_text(encoding="utf-8")
+    if 'sec["kind"] == "auto"' not in src:
+        bad.append("화면이 kind 로 분기하지 않는다")
+    if PR.check_phrasing is not S.check_phrasing:
+        bad.append("인과 표현 검사를 새로 만들었다 — sections.py 것을 쓴다")
+
+    return note("15 제안서 자동/사람 분리", not bad,
+                "; ".join(bad) if bad
+                else f"절 {len(secs)}개 중 사람이 쓰는 절 "
+                     f"{sum(1 for s in secs if s['kind'] == 'human')}개 · "
+                     f"검사는 재사용")
+
 
 def main():
     tables = load()
@@ -328,6 +362,7 @@ def main():
     r12_reason_kind()
     r13_no_redistributable()
     r14_deploy_files()
+    r15_proposal_split()
 
     width = max(len(f["규칙"]) for f in FINDINGS)
     print()

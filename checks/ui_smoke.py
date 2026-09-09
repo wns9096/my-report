@@ -41,6 +41,15 @@ def main():
               f"elements={len(at.markdown) + len(at.dataframe) + len(at.button)}")
         if not ok:
             fails.append((screen, at.exception[0].value))
+            continue
+        # 리포트 화면은 9주차 Day2 부터 탭 둘이다. 탭 몸통은 둘 다 실행되므로
+        # 제안서 탭이 팔리는 것만으로는 안 보인다 — 그 탭의 위젯을 집어 본다.
+        if screen == "리포트":
+            keys = [r.key for r in at.radio]
+            if "prop_toc" not in keys:
+                fails.append((screen, f"제안서 탭의 목차가 없다 (radio={keys})"))
+            else:
+                print(f"       제안서 탭 목차 {len(at.radio[keys.index('prop_toc')].options)}개")
     for s, e in fails:
         print(f"\n[{s}] {e}")
     print("\n" + ("4개 화면 전부 열림" if not fails else f"{len(fails)}개 화면 에러"))
