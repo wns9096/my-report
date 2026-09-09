@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""화~금 4일치 확인을 한 번에 돌린다."""
+"""8주차 나흘치 + 9주차 확인을 한 번에 돌린다.
+
+문서는 손으로 쓴다. 손으로 쓴 숫자는 반드시 어긋난다 —
+그래서 문서도 검사 대상이다.
+"""
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +19,7 @@ STEPS = [
     ("게이트 1·2·3 통과 + PDF", "checks/run_gates.py"),
     ("4개 화면이 열리는가", "checks/ui_smoke.py"),
     ("앱점검 — 나흘치 규칙을 앱이 지키는가", "checks/app_audit.py"),
+    ("9주차 Day1 — 발견.md 의 숫자가 조회값과 같은가", "checks/w9d1_verify.py"),
 ]
 
 
