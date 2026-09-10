@@ -1,401 +1,551 @@
 # -*- coding: utf-8 -*-
-"""제안서 조립층 — 9주차 Day2.
+"""제안서 조립층 — 9주차 Day3. **어제 것을 두고 처음부터 다시 짰다.**
 
-자동으로 쓴다 → 한 장 요약 · 하지 말 것 · 다시 할 것 · 할 것 · 부록(근거 상세)
-사람이 쓴다   → 이 제안이 틀린다면 · 적용 (후보는 자동, 고르는 것은 사람)
+어제는 «카드를 문서 구조로 옮기는 것»이었다. 오늘은 «읽은 사람이 결정을
+내릴 수 있는가»다. 읽는 사람이 다르면 문서가 다르다 — 그래서 절이 바뀌었다.
 
-가르는 기준은 하나다 — **이 절을 데이터에서 다시 조회하면 똑같이 나오는가.**
-그렇다면 자동, 아니면 사람이다. `sections.py` 와 같은 이유로 오른쪽을
-자동화하지 않는다. 자동화하는 순간 책임의 주체가 사라진다.
+  분석 문서   같은 분석을 하는 사람이 읽는다. 어떻게 계산했나가 궁금하다.
+  제안서      결정 권한을 가진 사람이 읽는다. 뭘 해야 하나 · 얼마짜리인가 ·
+              틀리면 어쩌나가 궁금하다.
 
-`sections.py` 는 건드리지 않는다. 리포트와 제안서는 다른 문서다.
-같은 원칙을 따로 된 파일에 적용한다. 다만 인과 표현 검사는 **재사용한다** —
-금지어 목록을 두 곳에 두면 한 곳만 고쳐지고, 그때부터 두 문서가 다른 기준으로
-검사된다.
+그래서 이 문서에는 계산 과정이 들어가지 않는다. 함수 이름도 항목 이름도
+부록으로조차 넣지 않는다. 궁금하면 앱을 열면 된다.
+
+절의 순서가 곧 설득의 순서다 — 현황 → 원인 → 규모 → 제안 → 위험 → 요청.
+규모를 제안 뒤에 두면 «왜 이걸 해야 하지»가 안 풀린 채로 제안을 읽고,
+위험을 요청 뒤에 두면 결정한 다음에 리스크를 듣는다.
+
+  자동으로 쓴다  현황 · 원인 · 규모 · 제안   틀리면 «사실»이 틀린 것이다
+  사람이 쓴다    위험 · 요청                언제 접을지, 무엇을 결정해 달라고
+                                          할지는 데이터가 못 정한다
+
+사람이 쓰는 절은 **둘뿐이다.** 셋 이상이면 자동화가 덜 된 것이고,
+하나도 없으면 책임질 사람이 없는 문서다.
+
+인쇄되는 말은 이 파일에 없다. 전부 `core/config.py` 의 PROPOSAL_WORDS 에서 온다.
+아래 키(«현황» 같은 것)는 인쇄되지 않는 내부 이름이다.
 """
 import html
+import json
 import re
-from pathlib import Path
+
+import pandas as pd
 
 from core import config
-from report import pdf as pdfmod
-# ★ 새로 만들지 않는다. sections.py 의 것을 그대로 쓴다.
+# ★ 인과 표현 검사는 새로 만들지 않는다. 8주차 것을 그대로 쓴다.
+#   목록을 두 곳에 두면 한 곳만 고쳐지고, 그때부터 두 문서가 다른 기준이 된다.
 from report.sections import BANNED, NOT_WRITTEN, SUGGEST, check_phrasing
+from viz import proposal_charts as pcharts
 
-# 이 이름들은 이 모듈을 거친다. 화면과 검사가 sections 와 proposal 을
-# 둘 다 임포트하지 않게 하려고 다시 내보낸다 — 새로 만들지는 않는다.
-__all__ = ["build", "load_cards", "card_problems", "to_html", "build_pdf",
-           "auto_sections", "next_candidates", "todo_count", "is_todo",
-           "ORDER", "KINDS", "HUMAN_TITLES", "TODO",
+__all__ = ["build", "load_cards", "card_problems", "to_html", "one_pager",
+           "auto_sections", "human_missing", "has_decision_verb", "last_line",
+           "load_human", "save_human", "human_for", "save_human_for",
+           "is_todo", "todo_parts", "fmt_value", "display_table",
+           "SECTIONS", "HUMAN_KEYS", "TODO",
            "BANNED", "SUGGEST", "check_phrasing", "NOT_WRITTEN"]
 
 CARDS_PATH = config.ROOT / "제안카드.md"
-CRITERIA_PATH = config.ROOT / "판단기준.md"
+HUMAN_PATH = config.OUT / "proposal_human.json"
 
-# 못 채운 자리에 쓰는 말. 카드에 이 말이 있으면 화면에도 이 말이 그대로 뜬다.
-TODO = "미확인"
+# 못 채운 자리에 쓰는 말. 문서에 인쇄되는 값이라 config 에서 온다.
+TODO = config.PROPOSAL_WORDS["확인필요"]
 
-# 분류 셋. 순서가 곧 본문 순서다 — 바꾸지 않는다.
-KINDS = ("하지 말 것", "다시 할 것", "할 것")
-
-# ── 절 순서 — 고정 ────────────────────────────────────────────────────────
-# 「할 것」을 앞에 두면 읽는 사람이 거기서 멈추고 「하지 말 것」은 안 읽힌다.
-# 멈추자는 제안이 가장 안 읽히므로 가장 앞에 둔다.
-SUMMARY = "한 장 요약"
-WRONG = "이 제안이 틀린다면"
-NEXT = "적용"
-APPENDIX = "부록 (근거 상세)"
-
-ORDER = [SUMMARY, *KINDS, WRONG, NEXT, APPENDIX]
-HUMAN_TITLES = (WRONG, NEXT)
-
-PLACEHOLDERS = {
-    WRONG: "이 제안이 틀렸다면 무엇 때문인지, 확인하려면 무엇을 보면 되는지 "
-           "적으십시오.",
-    NEXT: "위 후보 중 무엇을 다음에 볼 것인지, 왜 그것인지 적으십시오.",
-}
+# 절의 내부 이름과 순서. 순서를 바꾸지 않는다 — 설득의 순서다.
+SECTIONS = ("현황", "원인", "규모", "제안", "위험", "요청")
+HUMAN_KEYS = ("위험", "요청")
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 카드 읽기 — 화면은 읽기만 한다
+# 재료 — 카드 · 사람이 쓴 절
 # ══════════════════════════════════════════════════════════════════════════
 _FIELD = re.compile(r"^-\s*([^:]{1,10}):\s*(.*)$")
-_FIELDS = ("제목", "분류", "확신도", "근거", "크기", "비용", "효과", "되돌림", "출처")
+_FIELDS = ("제목", "분류", "주제키", "확신도", "근거", "크기", "비용", "효과",
+           "되돌림", "출처")
 
 
-def load_cards(path=None) -> dict:
-    """제안카드.md 를 딕셔너리로 읽는다.
-
-    이 파일이 원본이다. 여기서 고치지 않고, 여기서 계산하지도 않는다.
-    """
-    p = Path(path) if path else CARDS_PATH
+def load_cards(path=None) -> list[dict]:
+    """제안카드.md 를 읽는다. 화면도 이 파일도 카드를 고치지 않는다 — 읽기만 한다."""
+    p = path or CARDS_PATH
     if not p.exists():
-        return {"cards": [], "원본": p.name, "조회": "", "본문": ""}
-    text = p.read_text(encoding="utf-8")
-    m = re.search(r"조회 일시:\s*(\S+\s+\S+)", text)
-
+        return []
     cards = []
-    for block in re.split(r"^## ", text, flags=re.M)[1:]:
+    for block in re.split(r"^## ", p.read_text(encoding="utf-8"), flags=re.M)[1:]:
         lines = block.splitlines()
         f = {}
         for ln in lines[1:]:
-            mm = _FIELD.match(ln.strip())
-            if mm and mm.group(1).strip() in _FIELDS:
-                f[mm.group(1).strip()] = mm.group(2).strip()
-        if f.get("분류") in KINDS:
+            m = _FIELD.match(ln.strip())
+            if m and m.group(1).strip() in _FIELDS:
+                f[m.group(1).strip()] = m.group(2).strip()
+        if f.get("분류") in config.PROPOSAL_WORDS["분류"]:
             f["카드"] = lines[0].strip()
             cards.append(f)
-    return {"cards": cards, "원본": p.name,
-            "조회": m.group(1) if m else "", "본문": text}
+    return cards
 
 
-def card_problems(cards: list[dict]) -> list[str]:
+def is_todo(v) -> bool:
+    return bool(v) and str(v).startswith(TODO)
+
+
+def todo_parts(v) -> list[str]:
+    """«확인 필요» 를 셋으로 쪼갠다 — 무엇을 · 누가 · 모르는 채로 할 수 있는 결정.
+
+    셋이 갖춰지면 그 자리는 구멍이 아니라 요청이 된다. 낱말 하나로 두면 구멍이다.
+    """
+    return [s.strip() for s in str(v).split(" — ")[1:]]
+
+
+def card_problems(cards) -> list[str]:
     """근거 없는 제안을 막는다. 차단은 실패가 아니다 — 오늘의 결과일 수 있다."""
-    bad = []
     if not cards:
-        bad.append("카드가 한 장도 없다. 발견.md 로 돌아가 근거 넷이 갖춰진 "
-                   "문장부터 다시 고른다.")
-        return bad
+        return ["카드가 한 장도 없습니다. 근거 넷이 갖춰진 문장부터 다시 고릅니다."]
+    bad = []
     if not any(c["분류"] == "하지 말 것" for c in cards):
-        bad.append("「하지 말 것」이 하나도 없다. 지금 하는 게 다 옳을 리 없다.")
+        bad.append("「하지 말 것」이 하나도 없습니다. 지금 하는 게 다 옳을 리 없습니다.")
     for c in cards:
         t = c.get("제목", c["카드"])
-        g = c.get("근거", "")
-        if "/" not in g:
-            bad.append(f"「{t}」 근거에 분자·분모가 없다.")
-        if "비중" not in g:
-            bad.append(f"「{t}」 근거에 비중이 없다. 비중을 모르면 큰일인지 모른다.")
+        for fld in ("비용", "효과", "되돌림", "크기"):
+            v = c.get(fld, "")
+            if is_todo(v) and len(todo_parts(v)) < 3:
+                bad.append(f"「{t}」 {fld} 가 낱말 하나로 남았습니다 — "
+                           f"무엇을·누가·모르는 채로 할 수 있는 결정 셋으로 적습니다.")
         if c["분류"] == "할 것" and not c.get("효과", "").startswith("실측"):
-            bad.append(f"「{t}」 효과를 실측하지 않았는데 「할 것」에 있다. "
-                       f"「다시 할 것」으로 옮긴다.")
+            bad.append(f"「{t}」 효과를 실측하지 않았는데 「할 것」에 있습니다.")
     return bad
 
 
-def is_todo(v: str) -> bool:
-    return bool(v) and v.startswith(TODO)
+def load_human() -> dict:
+    if HUMAN_PATH.exists():
+        return json.loads(HUMAN_PATH.read_text(encoding="utf-8"))
+    return {}
 
 
-def _size(c) -> float:
-    """크기 숫자만 뽑는다. 「미확인」이면 견줄 수 없으므로 -1."""
-    m = re.match(r"([0-9]+(?:\.[0-9]+)?)", c.get("크기", ""))
-    return float(m.group(1)) if m else -1.0
+def save_human(d: dict):
+    HUMAN_PATH.write_text(json.dumps(d, ensure_ascii=False, indent=2),
+                          encoding="utf-8")
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# 자동으로 쓰는 절
-# ══════════════════════════════════════════════════════════════════════════
-def _a_summary(cards, data) -> str:
-    """넷을 넘기지 않는다. 다섯째 줄이 생기면 잘못 조립한 것이다.
+def human_for(topic) -> dict:
+    """사람이 쓴 절은 주제마다 다르다.
 
-    배경·목적은 여기 넣지 않는다 — 부록으로 뺀다.
+    «무엇을 결정해 달라»는 주제가 바뀌면 통째로 바뀐다. 한 벌만 두면
+    주제를 바꿔도 같은 요청문이 따라와서, 읽는 사람이 다른 결정을 하게 된다.
     """
-    big = max(cards, key=_size) if cards else None
-
-    # 발견 — 크기가 가장 큰 카드의 근거를 그대로 옮긴다. 표본은 근거 줄로 뺀다.
-    if big:
-        ev = big["근거"].split(" · 표본")[0]
-        ev = re.sub(r"^값\s*", "", ev)
-        sample = big["근거"].split("표본", 1)[1].strip() if "표본" in big["근거"] else TODO
-    else:
-        ev, sample = TODO, TODO
-
-    # 제안 — 본문과 같은 순서로 제목만 나열한다
-    parts = []
-    for k in KINDS:
-        titles = [f"「{c.get('제목', c['카드'])}」" for c in cards if c["분류"] == k]
-        parts.append(f"{k} " + (" ".join(titles) if titles else "(카드 없음)"))
-
-    # 불확실 — 못 채운 자리 중 크기가 가장 큰 카드의 것. 효과부터 본다.
-    # 효과를 먼저 보는 이유: 읽는 사람이 움직이는 근거가 효과다.
-    unc = TODO
-    for c in sorted(cards, key=_size, reverse=True):
-        for fld in ("효과", "비용", "크기", "되돌림"):
-            if is_todo(c.get(fld, "")):
-                unc = f"「{c.get('제목', c['카드'])}」의 {fld} · {c[fld]}"
-                break
-        if unc != TODO:
-            break
-
-    return "\n".join([
-        f"발견    {ev}",
-        f"제안    {' · '.join(parts)}",
-        f"불확실  {unc}",
-        f"근거    {data['조회']} 조회 · 표본 {sample} · 상세는 부록",
-    ])
+    return load_human().get(topic["키"], {})
 
 
-def _a_kind(cards, kind) -> str:
-    """한 분류의 카드를 늘어놓는다. 카드에 없는 것은 쓰지 않는다."""
-    mine = [c for c in cards if c["분류"] == kind]
+def save_human_for(topic, d: dict):
+    all_ = load_human()
+    all_[topic["키"]] = d
+    save_human(all_)
+
+
+def has_decision_verb(text) -> bool:
+    """요청 문장에 결정을 요구하는 동사가 있는가.
+
+    없으면 그것은 보고이지 제안이 아니다. 읽은 사람이 «잘 봤다»로 끝낸다.
+    """
+    return any(v in str(text) for v in config.PROPOSAL_WORDS["결정동사"])
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 문장 — 한 절에 세 문장을 넘지 않는다
+# ══════════════════════════════════════════════════════════════════════════
+def _pp(v, nd=1):
+    return f"{float(v) * 100:.{nd}f}"
+
+
+def _josa(word, pair=("은", "는")):
+    """받침에 따라 조사를 고른다.
+
+    «서류 통과율는» 같은 문장은 사람이 안 쓴다. 한 글자가 틀리면 문서 전체가
+    기계가 쓴 것으로 읽히고, 그러면 숫자도 안 믿는다.
+    """
+    # 이름 뒤 괄호는 곁말이다. 조사는 이름에 붙는다 —
+    # «경쟁 높음 (0.65~1.00)가» 가 아니라 «경쟁 높음(0.65~1.00)은».
+    w = re.sub(r"\s*\([^()]*\)\s*$", "", str(word))
+    ch = w.rstrip(" ]」』%").strip()[-1:]
+    if not ch:
+        return pair[1]
+    if "가" <= ch <= "힣":
+        return pair[0] if (ord(ch) - 0xAC00) % 28 else pair[1]
+    # 숫자는 읽는 소리로 본다 — 1(일) 3(삼) 6(육) 7(칠) 8(팔) 에 받침이 있다.
+    if ch.isdigit():
+        return pair[0] if ch in "13678" else pair[1]
+    return pair[1]
+
+
+def _gap_pp(hi, lo):
+    """격차는 화면에 찍히는 값끼리 뺀다. 원값으로 빼면 암산이 안 맞는다."""
+    return f"{round(round(float(hi) * 100, 1) - round(float(lo) * 100, 1), 1):.1f}"
+
+
+def _s_현황(topic, ev, cards, human):
+    h = ev.get("현황")
+    if not h:
+        return None
+    f, unit, w = h["표"], h["단위"], h["병목"]
+    return {
+        "문장": [
+            f"{f.iloc[w - 1]['단계']} {h['병목 분모']:,}{unit} 가운데 "
+            f"{f.iloc[w]['단계']}까지 가는 것은 {h['병목 도달']:,}{unit}입니다.",
+            f"구간 {len(f) - 1}개 가운데 {h['병목 구간']} 전환율 "
+            f"{_pp(h['병목 전환율'])}%가 가장 낮습니다.",
+        ],
+        "차트": pcharts.funnel_svg(h),
+        "표": h["구간표"],
+    }
+
+
+def _s_원인(topic, ev, cards, human):
+    c = ev.get("원인")
+    if not c or not c.get("최저") or not c.get("최고"):
+        return None
+    lo, hi, unit = c["최저"], c["최고"], c["단위"]
+    hidden = len(c["감춘 칸"])
+    문장 = [
+        f"{c['구간']} 구간을 {c['축']}{_josa(c['축'], ('으로', '로'))} 나누면 "
+        f"{lo['칸']}{_josa(lo['칸'], ('이', '가'))} {_pp(lo['전환율'])}%입니다 "
+        f"({int(lo['도달']):,}{unit} / {int(lo['시작']):,}{unit}).",
+        f"가장 높은 {hi['칸']} {_pp(hi['전환율'])}%와 견주면 "
+        f"{_gap_pp(hi['전환율'], lo['전환율'])}%p 벌어지고, 낮은 쪽이 이 구간에 "
+        f"들어온 것의 {_pp(lo['비중'], 1)}%를 차지합니다.",
+    ]
+    if hidden:
+        문장.append(f"표본이 모자란 {hidden}칸은 값을 내지 않았습니다.")
+    t = c["표"].loc[c["표"]["사유"].isna(), ["칸", "시작", "도달", "전환율", "비중"]]
+    return {"문장": 문장, "차트": pcharts.gap_svg(c),
+            "표": t.rename(columns={"시작": f"진입({unit})",
+                                    "도달": f"도달({unit})"})}
+
+
+def _s_규모(topic, ev, cards, human):
+    m = ev.get("규모")
+    if not m:
+        return None
+    real, conv = m["실측"], m["환산값"]
+    unit = conv["단위"]
+    # ★ 처음에는 «지금 벌어진 격차는 18.1%p» 라고만 썼다. 무엇과 견준
+    #   격차인지가 없어서 «낮다»의 기준이 문서에 없었다. 비교 대상을 반드시 적는다.
+    lo_n, hi_n = topic.get("낮은"), topic.get("높은")
+    비교 = (f"{lo_n}{_josa(lo_n)} {hi_n}보다 " if lo_n and hi_n else "격차가 ")
+    문장 = [
+        f"{비교}{_pp(real['격차'])}%p 낮고, 낮은 쪽에 들어온 것이 "
+        f"{real['분모']:,}{unit}입니다.",
+        f"이 격차가 그대로 이어진다고 보면 한 해에 "
+        f"{conv['연간건수']:,}{unit}{_josa(unit, ('이', '가'))} 여기서 더 "
+        f"빠집니다 (환산값입니다. 아래 가정 {len(m['가정'])}개를 두고 냈습니다).",
+    ]
+    차트, tr = None, ev.get("추세")
+    if tr:
+        svg = pcharts.trend_svg(tr)
+        s = tr["값"].loc[[i for i in tr["값"].index if i in set(tr["유효 구간"])]]
+        if svg and len(s) >= 2:
+            fmt = (lambda v: f"{_pp(v)}%") if tr["형식"] == "%" else \
+                (lambda v: f"{float(v):.3f}")
+            문장.append(
+                f"{tr['지표']}{_josa(tr['지표'])} 값을 믿을 수 있는 "
+                f"{s.index[0]} ~ {s.index[-1]} 구간에서 {fmt(s.iloc[0])}에서 "
+                f"{fmt(s.iloc[-1])}로 움직였습니다.")
+            차트 = svg
+    return {"문장": 문장, "차트": 차트,
+            "표": pd.DataFrame({"환산에 쓴 가정": m["가정"]})}
+
+
+def _s_제안(topic, ev, cards, human):
+    """이 주제에 붙은 카드가 없으면 절을 **아예 만들지 않는다.**
+
+    자리를 비워 두는 것과 자리를 안 만드는 것은 다르다. 비워 두면 그 빈칸이
+    그대로 인쇄된다.
+    """
+    mine = [c for c in cards if c.get("주제키") == topic["키"]]
     if not mine:
-        return ("(카드 없음) 이 분류의 카드를 만들지 않았다. "
-                "제안카드.md 의 「할 것 — 없다」에 왜인지 적어 두었다.\n"
-                "빈 채로 내보낸다 — 채우면 정하지 않은 것을 정한 것처럼 만든다.")
-    out = []
+        return None
+    kinds = {}
     for c in mine:
-        out.append(f"「{c.get('제목', c['카드'])}」")
-        for fld in ("근거", "비용", "효과", "되돌림"):
-            # 한글은 폭이 두 배다. {:<4} 로 맞추면 「되돌림」 줄만 한 칸 밀린다.
-            out.append(f"  {fld}{' ' * (8 - 2 * len(fld))}{c.get(fld, TODO)}")
-        out.append(f"  (출처 {c.get('출처', TODO)} · 확신도 {c.get('확신도', TODO)})")
-        out.append("")
-    return "\n".join(out).rstrip()
+        k = config.word("분류", c["분류"])
+        kinds[k] = kinds.get(k, 0) + 1
+    # 열을 셋으로 두었더니 좁은 칸에서 머리글자가 세로로 쪼개졌다("구 분").
+    # A4 폭에서 읽히려면 두 열이 맞다.
+    rows = []
+    for c in mine:
+        who = config.word("분류", c["분류"])
+        rows.append({"항목": "구분", "내용": who})
+        rows.append({"항목": "무엇을", "내용": c.get("제목", "")})
+        for fld in ("비용", "효과", "되돌림"):
+            v = c.get(fld, TODO)
+            if is_todo(v):
+                p = todo_parts(v)
+                v = (f"{TODO} · 모르는 것 {p[0]} · 확인 {p[1]} · "
+                     f"그래도 되는 결정 {p[2]}") if len(p) >= 3 else v
+            rows.append({"항목": fld, "내용": v})
+    return {
+        "문장": [
+            " · ".join(f"{k} {n}건" for k, n in kinds.items()) + "입니다.",
+            "내용은 " + " / ".join(f"「{c.get('제목', '')}」" for c in mine)
+            + "입니다.",
+        ],
+        "차트": None, "표": pd.DataFrame(rows),
+    }
 
 
-def _a_appendix(cards, data) -> str:
-    """근거 상세 — 카드의 근거 줄과 크기를 그대로 옮긴다. 새로 계산하지 않는다."""
-    out = [f"원본 {data['원본']} · 조회 {data['조회']}",
-           "아래 줄은 발견.md 문장을 카드로 옮긴 것이고, 이 절은 그 카드를 "
-           "다시 옮긴 것이다. 계산은 어디서도 새로 하지 않는다.", ""]
-    for c in cards:
-        out.append(f"{c['카드']} — {c.get('제목', '')}")
-        out.append(f"  출처    {c.get('출처', TODO)}")
-        out.append(f"  근거    {c.get('근거', TODO)}")
-        out.append(f"  크기    {c.get('크기', TODO)}")
-        out.append("")
-    return "\n".join(out).rstrip()
+def _s_위험(topic, ev, cards, human):
+    """사람이 쓴 글은 «문장» 이 아니라 «사람글» 에 둔다.
 
-
-# ══════════════════════════════════════════════════════════════════════════
-# 사람이 쓰는 절
-# ══════════════════════════════════════════════════════════════════════════
-_DECISION = re.compile(r"\*\*내가 내린 결정\*\*(.*?)(?=\n## |\Z)", re.S)
-
-
-def next_candidates(path=None, blocks=2) -> list[str]:
-    """판단기준.md 의 최근 「내가 내린 결정」 문장들.
-
-    후보는 자동으로 나열하고, 그중 무엇을 고를지는 사람이 정한다.
-    후보 자체는 편집할 수 없게 한다 — 자동으로 나온 것을 사람이 고치면
-    판단기준.md 와 화면 중 어느 것이 진짜인지 알 수 없게 된다.
+    ★ 처음에는 사람이 쓴 글을 문장 목록에 넣었더니, 화면에서 입력창과 본문에
+      **같은 글이 두 번** 나왔다. 자동으로 조립한 문장과 사람이 쓴 글은 자리가
+      다르다 — 섞어 두면 화면이 둘 다 그린다.
     """
-    p = Path(path) if path else CRITERIA_PATH
-    if not p.exists():
-        return []
-    out = []
-    for tbl in _DECISION.findall(p.read_text(encoding="utf-8"))[-blocks:]:
-        for ln in tbl.splitlines():
-            cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-            if len(cells) == 3 and not set(cells[0]) <= set("- "):
-                if cells[0] in ("무엇",):
-                    continue
-                out.append(f"{cells[0]} → {cells[1]}")
-    return out
+    return {"문장": [], "차트": None, "표": None,
+            "사람글": (human.get("위험") or "").strip() or NOT_WRITTEN,
+            "안내": "이 판단이 틀렸다면 어디서 틀린 것인지, 언제 접을지를 적습니다. "
+                    "데이터가 못 정하는 것입니다."}
 
 
-def _h_body(title, human) -> str:
-    return (human or {}).get(title, "").strip() or NOT_WRITTEN
+def _s_요청(topic, ev, cards, human):
+    """사람이 문장을 쓴다. 자동으로 지어내지 않는다.
+
+    다만 규모와 결정 선택지 셋은 자동으로 붙인다 — 그건 조회하면 같은 값이다.
+    선택지가 «보류» 하나뿐이면 그것은 선택지가 아니다.
+    """
+    m = ev.get("규모")
+    문장 = []
+    if m:
+        n, unit = m["환산값"]["연간건수"], m["환산값"]["단위"]
+        문장 = [
+            f"이 주제의 규모는 한 해 {n:,}{unit}입니다.",
+            f"결정을 다음 분기로 미루면 그동안 "
+            f"{round(n / 4):,}{unit}{_josa(unit, ('이', '가'))} 더 쌓입니다 "
+            f"(한 해분을 네 분기로 고르게 나눈 값입니다).",
+        ]
+    tbl = pd.DataFrame({"선택지": list(config.PROPOSAL_WORDS["결정"]),
+                        "따라오는 것": list(config.PROPOSAL_WORDS["결정"].values())})
+    return {"문장": 문장, "차트": None, "표": tbl, "강조": True,
+            "사람글": (human.get("요청") or "").strip() or NOT_WRITTEN,
+            "안내": f"읽는 사람은 {config.PROPOSAL_READER} 입니다. "
+                    f"결정을 요구하는 동사"
+                    f"({' · '.join(config.PROPOSAL_WORDS['결정동사'])})가 "
+                    f"들어가야 제안입니다."}
+
+
+_MAKERS = {"현황": _s_현황, "원인": _s_원인, "규모": _s_규모,
+           "제안": _s_제안, "위험": _s_위험, "요청": _s_요청}
 
 
 # ══════════════════════════════════════════════════════════════════════════
 # 조립
 # ══════════════════════════════════════════════════════════════════════════
-def build(cards: dict, human: dict | None = None) -> list[dict]:
-    """절 목록을 돌려준다. 절마다 kind 가 auto 인지 human 인지 붙는다.
+def build(topic, evidence, cards, human=None) -> list[dict]:
+    """절 목록을 돌려준다. 근거가 없는 절은 만들지 않는다.
 
-    kind 가 오늘의 채점 기준이다. 화면은 이 값으로만 편집 가능 여부를 가른다 —
-    화면이 제목을 보고 분기하면 절이 하나 늘 때마다 화면도 고쳐야 한다.
+    거르는 자리는 여기 한 곳뿐이다. 화면에서 또 거르면 두 곳이 갈린다.
     """
-    items = cards.get("cards", [])
-    secs = []
-    for title in ORDER:
-        if title == SUMMARY:
-            secs.append({"title": title, "kind": "auto",
-                         "body": _a_summary(items, cards)})
-        elif title in KINDS:
-            secs.append({"title": title, "kind": "auto",
-                         "body": _a_kind(items, title)})
-        elif title == APPENDIX:
-            secs.append({"title": title, "kind": "auto",
-                         "body": _a_appendix(items, cards)})
-        elif title == WRONG:
-            secs.append({"title": title, "kind": "human",
-                         "body": _h_body(title, human),
-                         "placeholder": PLACEHOLDERS[title],
-                         "note": "문서 전체에 하나만 둔다. 카드마다 두면 "
-                                 "아무도 안 읽는다."})
-        elif title == NEXT:
-            secs.append({"title": title, "kind": "human",
-                         "body": _h_body(title, human),
-                         "placeholder": PLACEHOLDERS[title],
-                         "candidates": next_candidates(),
-                         "note": "후보는 자동, 고르는 것은 사람이다."})
-    return secs
+    human = human or {}
+    out = []
+    for key in SECTIONS:
+        made = _MAKERS[key](topic, evidence, cards, human)
+        if made is None:
+            continue
+        out.append({"키": key, "제목": config.word("절", key),
+                    "질문": config.word("질문", key),
+                    "kind": "human" if key in HUMAN_KEYS else "auto",
+                    **made})
+    return out
 
 
 def auto_sections(secs) -> dict:
-    """인과 표현 검사에 넣을 자동 절만 골라 {제목: 본문} 으로."""
-    return {s["title"]: s["body"] for s in secs if s["kind"] == "auto"}
+    """인과 표현 검사에 넣을 자동 절만. 사람이 쓴 문장 때문에 조립이 실패하면 안 된다."""
+    return {s["제목"]: "\n".join(s["문장"]) for s in secs if s["kind"] == "auto"}
 
 
-def todo_count(secs) -> int:
-    return sum(s["body"].count(TODO) for s in secs) + \
-        sum(1 for s in secs if s["body"] == NOT_WRITTEN)
+def human_missing(secs) -> list[str]:
+    return [s["제목"] for s in secs if s["kind"] == "human"
+            and s.get("사람글") == NOT_WRITTEN]
+
+
+def last_line(secs) -> str:
+    """문서의 마지막 줄. 여기에 결정 동사가 없으면 오늘은 실패다."""
+    if not secs:
+        return ""
+    tail = secs[-1]
+    return tail.get("사람글") or (tail["문장"][-1] if tail["문장"] else "")
+
+
+def _first_sentence(text) -> str:
+    """첫 문장만. 사람이 여러 문단을 쓰면 요약 박스가 본문보다 길어진다."""
+    t = str(text).strip().splitlines()[0].strip() if str(text).strip() else ""
+    m = re.search(r"^(.{10,}?다\.)(\s|$)", t)
+    return m.group(1) if m else t
+
+
+def one_pager(secs) -> list[tuple]:
+    """한 장 요약 — 여섯을 압축한 것이다. 순서가 본문과 같아야 한다.
+
+    새 문장을 만들지 않는다. 각 절의 첫 문장(요청은 요청문)을 그대로 가져온다.
+    """
+    out = []
+    for s in secs:
+        line = s.get("사람글") or (s["문장"][0] if s["문장"] else "")
+        if line:
+            out.append((s["키"], _first_sentence(line)))
+    return out
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 내보내기 — HTML
+# HTML — A4 로 인쇄된다. 파일 하나로 열린다.
 # ══════════════════════════════════════════════════════════════════════════
-# 수업자료/제안서_템플릿.html 이 이 저장소에 없다. 구조와 클래스 이름
-# (num · todo)만 교안에서 가져와 여기서 만든다. 외부 CSS·이미지·CDN 은 쓰지
-# 않는다 — 인터넷 없이 열려야 한다.
+# 색은 넷까지 — 먹색 본문 · 회색 보조 · 강조 1색 · 위험 1색.
+# 강조와 위험은 config.COLORS 에서 받는다. 파일 안에서 새로 만들지 않는다.
 _CSS = """
-:root { --ink:#1a1a1a; --line:#d8dde3; --muted:#6b6b6b;
-        --num:%(neutral)s; --todo:%(warn)s; }
+@page { size: A4; margin: 18mm 16mm; }
+/* 색은 넷 — 먹색 본문 · 회색 보조 · 강조 1 · 위험 1.
+   선과 머리행 배경은 새 색이 아니라 먹색을 옅게 쓴 것이다. */
+:root { --ink:__INK__; --sub:__SUB__;
+        --accent:__ACCENT__; --danger:__DANGER__;
+        --line:rgba(26,26,26,.14); --head:rgba(26,26,26,.045); }
 * { box-sizing:border-box; }
 body { margin:0; background:#fff; color:var(--ink);
-       font:15px/1.7 "Malgun Gothic","Nanum Gothic","Apple SD Gothic Neo",sans-serif; }
-.wrap { max-width:820px; margin:0 auto; padding:40px 20px 80px; }
-h1 { font-size:24px; margin:0 0 6px; }
-.meta { color:var(--muted); font-size:13px; margin-bottom:28px; }
-section { border-top:1px solid var(--line); padding:22px 0 4px; }
-h2 { font-size:17px; margin:0 0 10px; display:flex; align-items:baseline; gap:8px; }
-.kind { font-size:11px; font-weight:600; letter-spacing:.04em;
-        border:1px solid var(--line); border-radius:10px; padding:1px 7px;
-        color:var(--muted); }
-.kind.human { color:var(--todo); border-color:var(--todo); }
-pre.body { margin:0; white-space:pre-wrap; word-break:break-word;
-           font:inherit; }
-.num { color:var(--num); font-variant-numeric:tabular-nums; font-weight:600; }
-.todo { color:var(--todo); font-weight:600; }
-ul.cand { margin:0 0 12px; padding-left:20px; color:var(--muted);
-          font-size:13.5px; }
-.note { color:var(--muted); font-size:12.5px; margin-top:8px; }
-@media print { .wrap { padding:0; } section { break-inside:avoid; } }
-""" % config.COLORS
-# ★ 처음에는 이 CSS 에 16진수를 직접 적었다가 앱점검 규칙 6에 걸렸다.
-#   판정 색을 파일 안에서 새로 만들면 config.COLORS 를 고쳐도 이 파일만 옛 색으로
-#   남는다. 어제 조회 스크립트에서 겪은 것과 같은 일이다 —
-#   **규칙을 한 곳에 넣는 것만으로는 안 된다. 새로 만드는 파일마다 다시 넣어야 한다.**
-#   그래서 % 치환으로 config.COLORS 에서 받아 온다. 무채색(글자·선)은 판정 색이
-#   아니라 여기 둔다.
+       font:10.5pt/1.65 "Malgun Gothic","Nanum Gothic","Apple SD Gothic Neo",sans-serif; }
+.sheet { max-width:180mm; margin:0 auto; padding:16mm 6mm 24mm; }
+h1 { font-size:17pt; margin:0 0 4px; line-height:1.35; }
+.meta { color:var(--sub); font-size:8.5pt; margin:0 0 14px; }
+.box { border:1px solid var(--line); border-left:3px solid var(--accent);
+       padding:11px 13px; margin:0 0 20px; }
+.box dl { margin:0; display:grid; grid-template-columns:64px 1fr; gap:3px 10px; }
+.box dt { color:var(--sub); font-size:8.5pt; padding-top:2px; }
+.box dd { margin:0; }
+section { margin:0 0 18px; }
+h2 { font-size:12pt; margin:0; page-break-after:avoid; break-after:avoid; }
+.q { color:var(--sub); font-size:8.5pt; margin:1px 0 8px;
+     page-break-after:avoid; break-after:avoid; }
+p { margin:0 0 6px; }
+figure { margin:10px 0 6px; page-break-inside:avoid; break-inside:avoid; }
+table { border-collapse:collapse; width:100%; font-size:9pt; margin:8px 0 0;
+        page-break-inside:avoid; break-inside:avoid; }
+th, td { text-align:left; padding:5px 8px; border:0;
+         border-bottom:1px solid var(--line); vertical-align:top; }
+/* 첫 열은 이름이다. 좁아져서 «구 분» 처럼 쪼개지지 않게 붙여 둔다. */
+th:first-child, td:first-child { white-space:nowrap; }
+th { background:var(--head); font-weight:600; color:var(--sub); }
+td.n, th.n { text-align:right; }
+.num { font-variant-numeric:tabular-nums; font-weight:700; }
+.unit { font-size:.85em; font-weight:400; }
+.todo { color:var(--danger); font-weight:600; }
+.ask { border-top:1px solid var(--ink); margin-top:12px; padding-top:10px;
+       font-size:11.5pt; font-weight:700; }
+.said { white-space:pre-wrap; margin:0 0 6px; }
+.note { color:var(--sub); font-size:8.5pt; margin-top:4px; }
+"""
+# ★ 처음에는 % 치환으로 색을 넣었다가 바로 터졌다 — CSS 안의
+#   width:100% 같은 글자가 서식 기호로 읽혔기 때문이다.
+#   서식 문자열은 내용이 기호를 안 쓸 때만 안전하다. CSS 는 그런 내용이 아니다.
+_CSS = (_CSS.replace("__ACCENT__", config.COLORS["warn"])
+            .replace("__DANGER__", config.COLORS["block"])
+            .replace("__INK__", config.DOC_COLORS["ink"])
+            .replace("__SUB__", config.DOC_COLORS["sub"]))
 
-# 숫자 · 백분율 · %p 를 감싼다. 이스케이프한 뒤에 돌린다 —
-# html.escape(quote=False) 는 숫자를 만들지 않으므로 태그 안을 건드리지 않는다.
-_NUM = re.compile(r"\d[\d,]*(?:\.\d+)?%?p?")
+# 숫자는 굵게, 뒤에 붙는 단위는 한 단계 작게.
+_NUM = re.compile(r"(\d[\d,]*(?:\.\d+)?)(%p|%|건|명|개월|장|건씩)?")
 
 
-def _mark(text: str) -> str:
-    s = html.escape(text, quote=False)
+def _mark(text) -> str:
+    s = html.escape(str(text), quote=False)
     s = s.replace(TODO, f'<span class="todo">{TODO}</span>')
     s = s.replace(NOT_WRITTEN, f'<span class="todo">{NOT_WRITTEN}</span>')
-    return _NUM.sub(lambda m: f'<span class="num">{m.group(0)}</span>', s)
+    return _NUM.sub(
+        lambda m: f'<span class="num">{m.group(1)}</span>'
+                  + (f'<span class="unit">{m.group(2)}</span>' if m.group(2) else ""),
+        s)
 
 
-def to_html(secs: list[dict]) -> str:
-    """단일 파일 HTML. 안 채워진 자리는 class="todo" 로 남긴다 — 채우지 않는다."""
+def _table_html(df) -> str:
+    if df is None or len(df) == 0:
+        return ""
+    head = "".join(f'<th class="{"n" if _numeric(df[c]) else ""}">'
+                   f'{html.escape(str(c), quote=False)}</th>' for c in df.columns)
     body = []
-    for s in secs:
-        kind_ko = "자동" if s["kind"] == "auto" else "사람"
-        body.append(f'<section>\n<h2>{html.escape(s["title"], quote=False)}'
-                    f'<span class="kind {s["kind"]}">{kind_ko}</span></h2>')
-        if s.get("candidates"):
-            body.append("<ul class=\"cand\">" + "".join(
-                f"<li>{_mark(c)}</li>" for c in s["candidates"]) + "</ul>")
-        body.append(f'<pre class="body">{_mark(s["body"])}</pre>')
-        if s.get("note"):
-            body.append(f'<p class="note">{_mark(s["note"])}</p>')
-        body.append("</section>")
-    return (
-        "<!doctype html>\n<html lang=\"ko\">\n<head>\n"
-        "<meta charset=\"utf-8\">\n"
-        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
-        f"<title>제안서 — {html.escape(config.DATASET, quote=False)}</title>\n"
-        f"<style>{_CSS}</style>\n</head>\n<body>\n<div class=\"wrap\">\n"
-        f"<h1>제안서</h1>\n<p class=\"meta\">"
-        f"{html.escape(config.DATASET, quote=False)} · "
-        f"{config.PERIOD[0]} ~ {config.PERIOD[1]} · 기준일 {config.AS_OF}"
-        f"</p>\n" + "\n".join(body) + "\n</div>\n</body>\n</html>\n")
+    for _, r in df.iterrows():
+        tds = []
+        for c in df.columns:
+            v = r[c]
+            cls = "n" if _numeric(df[c]) else ""
+            tds.append(f'<td class="{cls}">{_cell(v, c)}</td>')
+        body.append("<tr>" + "".join(tds) + "</tr>")
+    return (f'<table><thead><tr>{head}</tr></thead>'
+            f'<tbody>{"".join(body)}</tbody></table>')
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# 내보내기 — PDF
-# ══════════════════════════════════════════════════════════════════════════
-def build_pdf(secs: list[dict], out_path=None):
-    """리포트 PDF 와 같은 방식이다. 새 패턴을 만들지 않는다.
+def _numeric(col) -> bool:
+    return pd.api.types.is_numeric_dtype(col)
 
-    폰트도 report/pdf.py 의 것을 그대로 쓴다. 못 찾으면 FontMissing 이 올라가고
-    이 버튼만 안 된다 — 화면은 살아 있다.
+
+_PCT_COLS = ("전환율", "비중", "직전", "누적", "대비", "율")
+
+
+def fmt_value(v, name="") -> str:
+    """표 한 칸을 사람이 읽는 값으로. **화면과 문서가 이 함수 하나를 쓴다.**
+
+    ★ 화면은 st.dataframe 이 원값을 그대로 보여 주고 문서는 18.1% 로 보여 줬다.
+      같은 표인데 0.1806 과 18.1% 로 갈렸다 — 계산이 한 곳이어도 «보이는 값»이
+      두 곳에서 만들어지면 똑같이 갈린다.
     """
-    out_path = out_path or (config.OUT / "proposal.pdf")
-    reg, bold = pdfmod.find_font()      # 없으면 반쪽짜리를 남기기 전에 멈춘다
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return "—"
+    # 열 이름으로 비율을 알아본다. «첫 단계 대비» 를 빼먹었더니 원시 실수
+    # 0.1806087482362427 이 그대로 인쇄됐다.
+    if isinstance(v, float) and any(k in str(name) for k in _PCT_COLS):
+        return f"{v * 100:.1f}%"
+    if isinstance(v, (int,)) or (isinstance(v, float) and float(v).is_integer()):
+        return f"{int(v):,}"
+    return str(v)
 
-    doc = pdfmod.Doc()
-    doc.add_font("KO", "", str(reg))
-    doc.add_font("KO", "B", str(bold))
-    doc.set_auto_page_break(True, margin=18)
-    doc.add_page()
 
-    doc.set_font("KO", "B", 18)
-    doc.multi_cell(0, 10, "제안서", new_x="LMARGIN", new_y="NEXT")
-    doc.set_font("KO", "", 10)
-    doc.set_text_color(*pdfmod._rgb("none"))
-    doc.multi_cell(0, 6, f"{config.DATASET}  ·  {config.PERIOD[0]} ~ "
-                         f"{config.PERIOD[1]}  ·  기준일 {config.AS_OF}",
-                   new_x="LMARGIN", new_y="NEXT")
-    doc.set_text_color(0)
-    doc.ln(4)
+def display_table(df):
+    """화면에 그대로 띄울 수 있게 모든 칸을 문자열로 바꾼 사본."""
+    if df is None or len(df) == 0:
+        return df
+    out = df.copy()
+    for c in out.columns:
+        out[c] = [fmt_value(v, c) for v in df[c]]
+    return out
 
+
+def _cell(v, name="") -> str:
+    s = fmt_value(v, name)
+    return '<span class="todo">—</span>' if s == "—" else _mark(s)
+
+
+def to_html(secs, topic=None) -> str:
+    """단일 파일 HTML. 빈 절은 그리지 않는다. 외부 CSS·이미지·CDN 을 쓰지 않는다."""
+    body = []
+    summary = one_pager(secs)
+    if summary:
+        dl = "".join(f"<dt>{html.escape(config.word('요약', k), quote=False)}"
+                     f"</dt><dd>{_mark(v)}</dd>" for k, v in summary)
+        body.append(f'<div class="box"><dl>{dl}</dl></div>')
     for s in secs:
-        doc.set_font("KO", "B", 13)
-        doc.ln(3)
-        doc.multi_cell(0, 8, f"{s['title']}  "
-                             f"[{'자동' if s['kind'] == 'auto' else '사람'}]",
-                       new_x="LMARGIN", new_y="NEXT")
-        if s.get("candidates"):
-            doc.set_font("KO", "", 9)
-            doc.set_text_color(*pdfmod._rgb("none"))
-            for c in s["candidates"]:
-                doc.multi_cell(0, 5, f"  · {c}", new_x="LMARGIN", new_y="NEXT")
-            doc.set_text_color(0)
-        doc.set_font("KO", "", 9.5)
-        empty = s["body"] == NOT_WRITTEN
-        if empty:
-            doc.set_text_color(*pdfmod._rgb("muted"))
-        doc.multi_cell(0, 5.4, s["body"].replace("**", ""),
-                       new_x="LMARGIN", new_y="NEXT")
-        if empty:
-            doc.set_text_color(0)
+        if not s["문장"] and not s.get("사람글") and s.get("표") is None:
+            continue                        # 빈 절은 그리지 않는다
+        part = [f'<section><h2>{html.escape(s["제목"], quote=False)}</h2>'
+                f'<p class="q">{html.escape(s["질문"], quote=False)}</p>']
+        for line in s["문장"]:
+            part.append(f"<p>{_mark(line)}</p>")
+        if s.get("차트"):
+            part.append(f'<figure>{s["차트"]}</figure>')
+        part.append(_table_html(s.get("표")))
+        if s.get("사람글"):
+            cls = "ask" if s.get("강조") else "said"
+            part.append(f'<p class="{cls}">{_mark(s["사람글"])}</p>')
+        part.append("</section>")
+        body.append("".join(part))
 
-    doc.output(str(out_path))
-    return out_path
+    title = (topic or {}).get("제목", "제안")
+    return (
+        '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+        f'<title>{html.escape(str(title), quote=False)}</title>\n'
+        f"<style>{_CSS}</style>\n</head>\n<body>\n<div class=\"sheet\">\n"
+        f'<h1>{html.escape(str(title), quote=False)}</h1>\n'
+        f'<p class="meta">{html.escape(config.DATASET, quote=False)} · '
+        f'{config.PERIOD[0]} ~ {config.PERIOD[1]} · 기준일 {config.AS_OF} · '
+        f'세는 단위 {html.escape(str((topic or {}).get("세는 단위", "")), quote=False)}'
+        f"</p>\n" + "\n".join(body) + "\n</div>\n</body>\n</html>\n")

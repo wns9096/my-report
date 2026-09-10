@@ -25,10 +25,13 @@ STEPS = [
     ("Day3 실습 B·C — 감추기와 판정 순서", "checks/day3_trust.py"),
     ("Day4 실습 B — 인과 표현 검사", "checks/day4_phrasing.py"),
     ("게이트 1·2·3 통과 + PDF", "checks/run_gates.py"),
-    ("4개 화면이 열리는가", "checks/ui_smoke.py"),
+    ("화면 다섯이 열리는가", "checks/ui_smoke.py"),
     ("앱점검 — 나흘치 규칙을 앱이 지키는가", "checks/app_audit.py"),
     ("9주차 Day1 — 발견.md 의 숫자가 조회값과 같은가", "checks/w9d1_verify.py"),
-    ("9주차 Day2 — 제안서의 자동/사람 분리와 카드 대조", "checks/w9d2_proposal.py"),
+    # Day2 의 w9d2_proposal.py 를 여기로 옮겼다. 규칙이 사라진 것이 아니라
+    # 자동/사람 분리·카드 대조를 그대로 안고 Day3 의 검사가 더 붙은 것이다.
+    ("9주차 Day3 — 제안서 자가 검사 (자동/사람 · 카드 대조 · 결정 줄)",
+     "checks/w9d3_proposal.py"),
 ]
 
 

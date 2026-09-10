@@ -13,6 +13,9 @@ from core import config
 # ══════════════════════════════════════════════════════════════════════════
 _KEY = {"person": "applicant_id", "application": "application_id"}
 
+# 세는 단위의 이름. 화면·문서가 다 이것을 쓴다 — 두 곳에 두면 갈라진다.
+GRAIN_UNIT = {"person": "지원자 1명", "application": "지원 1건"}
+
 
 def _stage_pivot(tables, grain):
     """대상별 · 단계별 최초 도달일. 고유값으로 센다."""
@@ -450,3 +453,315 @@ def cohort_by_start_month(tables):
     g["못 믿을 사유"] = [trust_check(sample=n, obs_days=d_)
                          for n, d_ in zip(g["인원"], g["관측일수"])]
     return g
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 9주차 Day3 실습 A — 주제 후보 · 주제별 근거
+# ══════════════════════════════════════════════════════════════════════════
+# 후보는 하나만 뽑지 않는다. 하나만 뽑으면 그날 눈에 띈 것이 그대로 이번 분기의
+# 우선순위가 된다. 뽑을 수 있는 만큼 뽑아 놓고 고른다.
+#
+# ★ 새 임계값을 만들지 않았다. 격차 하한은 core/verdict.py 의 MOVE_MIN(5%p)을,
+#   비교 기간 길이는 config.MIN_OBS_DAYS(90일)를 빌려 썼다.
+#     MOVE_MIN  — 그 값의 뜻이 «최소 표본에서 잡음만으로 생길 수 있는 폭의 1.5배»다.
+#                 여기서 묻는 것도 «잡음이 아니라 신호인가»라서 같은 자를 쓴다.
+#                 여기서 새로 정하면 판정과 주제 선정이 서로 다른 자를 쓰게 된다.
+#     90일      — 관측이 차는 데 그만큼 걸린다. 그보다 짧게 끊어 견주면
+#                 아직 안 찬 달을 «떨어졌다»고 읽는다.
+TREND_MONTHS = max(1, round(config.MIN_OBS_DAYS / 30.44))
+
+
+def _gap_min():
+    """격차 하한. verdict 를 모듈 맨 위에서 부르면 순환이라 여기서 부른다."""
+    from core.verdict import MOVE_MIN
+    return MOVE_MIN
+
+
+def _period_years():
+    """기간을 «해»로 잰다. 계산에 현재 시각을 쓰지 않는다 — config.PERIOD 뿐이다."""
+    a, b = pd.Timestamp(config.PERIOD[0]), pd.Timestamp(config.PERIOD[1])
+    return ((b - a).days + 1) / 365.25
+
+
+def _pp(v):
+    """화면에 찍히는 자리(소수 첫째)까지 반올림한 %. 격차는 이 값끼리 뺀다."""
+    return round(float(v) * 100, 1)
+
+
+def _topic(key, kind, title, line, size, axis=None, span=None, grain=None,
+           reject=None, **extra):
+    d = {"키": key, "갈래": kind, "제목": title, "한줄": line,
+         "규모_연간건수": size, "근거축": axis, "구간": span,
+         "세는 단위": grain, "기각사유": reject}
+    d.update(extra)
+    return d
+
+
+def proposal_topics(tables):
+    """제안서로 쓸 만한 주제 후보를 가능한 만큼 뽑는다.
+
+    후보가 나오는 곳 넷 — 퍼널 구간 · 분해 축 · 임계값 · 추세.
+
+    ★ 기각과 «후보가 아님»은 다르다.
+        기각      비교했는데 차이가 작다 → 목록에 남기고 사유를 적는다.
+                  지우면 «안 봤다»와 «보고 아니었다»가 구분되지 않는다.
+        후보 아님  못 믿을 조건에 걸려 비교 자체가 안 된다 → 애초에 안 만든다.
+    """
+    from core import verdict as _v      # 순환을 피해 여기서 부른다
+    gap_min, years = _gap_min(), _period_years()
+    out = []
+
+    # ── ① 퍼널 구간 — 낮은 구간과 «그다음으로 낮은» 구간의 격차 ─────────
+    for grain, unit in (("person", "명"), ("application", "건")):
+        f = funnel(tables, grain)
+        rows = []
+        for i in range(1, len(f)):
+            r = f.iloc[i]
+            if pd.isna(r["직전 대비"]):
+                continue
+            rows.append({"구간": f"{f.iloc[i - 1]['단계']} → {r['단계']}",
+                         "전환율": float(r["직전 대비"]),
+                         "분모": int(f.iloc[i - 1]["인원"]),
+                         "도달": int(r["인원"])})
+        rows.sort(key=lambda x: x["전환율"])
+        for i in range(len(rows) - 1):
+            lo, nx = rows[i], rows[i + 1]
+            if trust_check(sample=lo["분모"]):
+                continue                # 비교 자체가 안 된다 — 기각이 아니다
+            gap = round(_pp(nx["전환율"]) - _pp(lo["전환율"]), 1) / 100
+            size = round(gap * lo["분모"] / years)
+            out.append(_topic(
+                f"구간:{grain}:{lo['구간']}", "퍼널 구간",
+                f"{lo['구간']} 구간 전환율 격차 ({unit} 기준)",
+                f"{lo['구간']} 전환율 {_pp(lo['전환율'])}% "
+                f"({lo['도달']:,}{unit} / {lo['분모']:,}{unit}). "
+                f"그다음으로 낮은 {nx['구간']} {_pp(nx['전환율'])}% 보다 "
+                f"{_pp(gap)}%p 낮습니다.",
+                size, span=lo["구간"], grain=GRAIN_UNIT[grain],
+                reject=None if gap >= gap_min else
+                f"격차 {_pp(gap)}%p 가 하한 {_pp(gap_min):.0f}%p 아래입니다",
+                낮은=lo["구간"], 높은=nx["구간"], 격차=gap,
+                분모=lo["분모"], 도달=lo["도달"], 단위=unit))
+
+    # ── ② 분해 축 — 최고 칸과 최저 칸의 격차 ──────────────────────────
+    span = f"{config.FUNNEL_STEPS[0]} → {config.FUNNEL_STEPS[1]}"
+    for axis in AXES:
+        try:
+            g = _v.decomp_with_trust(tables, axis)
+        except KeyError:
+            continue
+        ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
+        if len(ok) < 2:
+            continue                    # 믿을 수 있는 칸이 둘 미만 — 후보가 아니다
+        hi, lo = ok.loc[ok["전환율"].idxmax()], ok.loc[ok["전환율"].idxmin()]
+        gap = round(_pp(hi["전환율"]) - _pp(lo["전환율"]), 1) / 100
+        unit = "건" if AXES[axis][0] != "applicants" else "명"
+        size = round(gap * int(lo["시작"]) / years)
+        out.append(_topic(
+            f"축:{axis}", "분해 축", f"{axis} 칸 사이 전환율 격차",
+            f"{span} 구간을 {axis}로 쪼개면 {lo['칸']} {_pp(lo['전환율'])}% "
+            f"({int(lo['도달']):,}{unit} / {int(lo['시작']):,}{unit}), "
+            f"{hi['칸']} {_pp(hi['전환율'])}% 로 {_pp(gap)}%p 벌어집니다.",
+            size, axis=axis, span=span, grain=GRAIN_UNIT[
+                "application" if AXES[axis][0] != "applicants" else "person"],
+            reject=None if gap >= gap_min else
+            f"격차 {_pp(gap)}%p 가 하한 {_pp(gap_min):.0f}%p 아래입니다",
+            낮은=lo["칸"], 높은=hi["칸"], 격차=gap,
+            분모=int(lo["시작"]), 도달=int(lo["도달"]), 단위=unit,
+            비중=float(lo["비중"]), 감춘칸=int(g["사유"].notna().sum())))
+
+    # ── ③ 임계값 — 정해 둔 경고·위험선을 벗어난 지표 ──────────────────
+    k = kpis(tables)
+    for name, th in config.THRESHOLDS.items():
+        v = k[name]["값"]
+        if v is None:
+            continue
+        base, level = (th["위험"], "위험") if v < th["위험"] else \
+            ((th["경고"], "경고") if v < th["경고"] else (th["경고"], None))
+        ratio = k[name]["형식"] == "%"
+        if level is None:
+            size, reject = None, f"경고선 {th['경고']} 위입니다 (현재 {v:.3f})"
+        elif ratio:
+            size = round((base - v) * k[name]["표본"] / years)
+            reject = None
+        else:
+            # 비율이 아니라 평균이다. 분자·분모가 없어 건수로 환산할 수 없다.
+            size = None
+            reject = (f"{name} 은 비율이 아니라 평균입니다. 분자·분모가 없어 "
+                      f"건수로 환산할 수 없습니다")
+        shown = f"{_pp(v)}%" if ratio else f"{v:.3f}"
+        shown_b = f"{_pp(base)}%" if ratio else f"{base:.3f}"
+        out.append(_topic(
+            f"임계값:{name}", "임계값", f"{name} 임계값",
+            f"{name} 현재 {shown} 입니다. {level or '경고'}선 {shown_b} 를 "
+            f"{'밑돕니다' if level else '넘습니다'} (표본 {k[name]['표본']:,}).",
+            size, grain=k[name]["설명"], reject=reject,
+            지표=name, 현재=v, 기준=base, 수준=level))
+
+    # ── ④ 추세 — 최근 N개월이 직전 N개월보다 떨어졌는가 ────────────────
+    m = monthly(tables)
+    cut = pd.Period(config.VALID_UNTIL[:7], freq="M")
+    m = m.loc[[i for i in m.index if pd.Period(str(i), freq="M") <= cut]]
+    n = TREND_MONTHS
+    for name in [config.MAIN_METRIC, "최종 합격률"] + config.GUARDRAILS:
+        s = m[name].dropna()
+        if len(s) < 2 * n:
+            continue                    # 견줄 구간이 없다 — 후보가 아니다
+        rec, prv = float(s.iloc[-n:].mean()), float(s.iloc[-2 * n:-n].mean())
+        ratio = name in (config.MAIN_METRIC, "최종 합격률")
+        drop = round(_pp(prv) - _pp(rec), 1) / 100 if ratio else (prv - rec)
+        if ratio:
+            size = round(drop * k[name]["표본"] / years) if drop > 0 else None
+            reject = None if drop >= gap_min else (
+                f"하락폭 {_pp(drop)}%p 가 하한 {_pp(gap_min):.0f}%p 아래입니다"
+                if drop > 0 else f"떨어지지 않았습니다 ({_pp(-drop)}%p 올랐습니다)")
+            shown = f"{_pp(rec)}% (직전 {n}개월 {_pp(prv)}%)"
+        else:
+            size = None
+            reject = (f"{'떨어졌습니다' if drop > 0 else '떨어지지 않았습니다'} "
+                      f"({prv:.3f} → {rec:.3f}). 다만 비율이 아니라 평균이라 "
+                      f"건수로 환산할 수 없습니다")
+            shown = f"{rec:.3f} (직전 {n}개월 {prv:.3f})"
+        out.append(_topic(
+            f"추세:{name}", "추세", f"{name} 최근 {n}개월 변화",
+            f"{name} 최근 {n}개월 평균이 {shown} 입니다. "
+            f"견준 구간은 {s.index[-2 * n]} ~ {s.index[-1]} 입니다.",
+            size, grain=k[name]["설명"], reject=reject,
+            지표=name, 최근=rec, 직전=prv, 하락=drop))
+
+    # 규모가 큰 순서로. 기각된 것은 맨 뒤로 보내되 지우지 않는다.
+    out.sort(key=lambda d: (d["기각사유"] is not None,
+                            -(d["규모_연간건수"] or 0)))
+    return out
+
+
+def _grain_of(topic):
+    """이 주제를 어느 단위로 세는가. 키에 박아 둔 것을 그대로 읽는다."""
+    if topic["키"].startswith("구간:"):
+        return topic["키"].split(":")[1]
+    if topic["키"].startswith("축:"):
+        axis = topic["키"].split(":", 1)[1]
+        return "person" if AXES[axis][0] == "applicants" else "application"
+    return config.GRAIN
+
+
+def _cause_axis(tables, grain, span=None):
+    """이 그레인으로 쪼갤 수 있는 축 중 격차가 가장 큰 것.
+
+    그레인이 다른 축으로 쪼개면 분모가 달라져 견줄 수 없다. 그래서 먼저 거른다.
+    """
+    from core import verdict as _v
+    best = None
+    for axis in AXES:
+        if ("person" if AXES[axis][0] == "applicants" else "application") != grain:
+            continue
+        try:
+            g = _v.decomp_with_trust(tables, axis)
+        except KeyError:
+            continue
+        ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
+        if len(ok) < 2:
+            continue
+        gap = round(_pp(ok["전환율"].max()) - _pp(ok["전환율"].min()), 1) / 100
+        if best is None or gap > best[1]:
+            best = (axis, gap, g)
+    return best
+
+
+def topic_evidence(tables, topic):
+    """고른 주제 하나가 쓸 근거를 한 번에 모아 돌려준다.
+
+    이 함수는 **조회만 한다.** 문장은 만들지 않는다 — 문장은 report/proposal.py 다.
+    없는 것은 지어내지 않고 None 으로 두되, 왜 없는지를 «없는 이유» 에 남긴다.
+    실측과 환산값은 키를 나눈다. 섞으면 어느 쪽이 잰 값인지 안 보인다.
+    """
+    grain = _grain_of(topic)
+    unit = "명" if grain == "person" else "건"
+    years = _period_years()
+    ev = {"주제": topic, "세는 단위": GRAIN_UNIT[grain],
+          "현황": None, "원인": None, "규모": None, "추세": None, "없는 이유": {}}
+
+    # ── 현황 — 그 주제가 속한 퍼널 전체 ────────────────────────────────
+    f = funnel(tables, grain).copy()
+    f["구간"] = [None] + [f"{f.iloc[i - 1]['단계']} → {f.iloc[i]['단계']}"
+                          for i in range(1, len(f))]
+    worst = int(f.iloc[1:]["직전 대비"].astype(float).idxmin())
+    # 표는 «구간»으로 낸다. 단계로 내면 첫 줄의 직전 대비가 반드시 빈칸이 되고,
+    # 빈칸은 문서에 그대로 인쇄된다. 단계별 도달은 그림이 보여준다.
+    span_tbl = pd.DataFrame([
+        {"구간": f.iloc[i]["구간"],
+         f"진입({unit})": int(f.iloc[i - 1]["인원"]),
+         f"도달({unit})": int(f.iloc[i]["인원"]),
+         "전환율": float(f.iloc[i]["직전 대비"]),
+         "첫 단계 대비": float(f.iloc[i]["누적"])}
+        for i in range(1, len(f))])
+    ev["현황"] = {"표": f, "구간표": span_tbl, "병목": worst, "단위": unit,
+                  "그레인": GRAIN_UNIT[grain],
+                  "병목 구간": f.iloc[worst]["구간"],
+                  "병목 전환율": float(f.iloc[worst]["직전 대비"]),
+                  "병목 분모": int(f.iloc[worst - 1]["인원"]),
+                  "병목 도달": int(f.iloc[worst]["인원"])}
+
+    # ── 원인 — 그 주제의 분해 축 표 ────────────────────────────────────
+    axis = topic.get("근거축")
+    got = None
+    if axis:
+        from core import verdict as _v
+        got = (axis, None, _v.decomp_with_trust(tables, axis))
+    else:
+        got = _cause_axis(tables, grain, topic.get("구간"))
+    if got is None:
+        ev["없는 이유"]["원인"] = (
+            f"{GRAIN_UNIT[grain]} 단위로 쪼갤 수 있는 축 중 믿을 수 있는 칸이 "
+            f"둘 이상인 것이 없습니다")
+    else:
+        a, _gap, g = got
+        ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
+        g = g.copy()
+        g["표시"] = ""
+        if len(ok) >= 2:
+            g.loc[ok["전환율"].idxmax(), "표시"] = "최고"
+            g.loc[ok["전환율"].idxmin(), "표시"] = "최저"
+        ev["원인"] = {
+            "축": a, "표": g, "단위": "명" if AXES[a][0] == "applicants" else "건",
+            "구간": f"{config.FUNNEL_STEPS[0]} → {config.FUNNEL_STEPS[1]}",
+            "최고": g.loc[g["표시"] == "최고"].iloc[0].to_dict() if (g["표시"] == "최고").any() else None,
+            "최저": g.loc[g["표시"] == "최저"].iloc[0].to_dict() if (g["표시"] == "최저").any() else None,
+            "감춘 칸": g.loc[g["사유"].notna(), ["칸", "시작", "사유"]],
+        }
+
+    # ── 규모 — 연간 건수 + 환산에 쓴 가정 ──────────────────────────────
+    if topic.get("규모_연간건수") is None:
+        ev["없는 이유"]["규모"] = topic.get("기각사유") or "환산할 분모가 없습니다"
+    else:
+        ev["규모"] = {
+            "실측": {"격차": topic.get("격차"), "분모": topic.get("분모"),
+                     "단위": topic.get("단위", unit)},
+            "환산값": {"연간건수": topic["규모_연간건수"], "단위": topic.get("단위", unit)},
+            "가정": [
+                "지금 벌어진 격차가 앞으로도 그대로 이어진다고 봅니다. "
+                "개입 효과를 실측한 값이 아닙니다.",
+                f"기간 {config.PERIOD[0]} ~ {config.PERIOD[1]} "
+                f"({years:.2f}년)으로 나눠 한 해분으로 환산했습니다.",
+                f"분모는 그 구간·칸에 실제로 진입한 "
+                f"{topic.get('분모', 0):,}{topic.get('단위', unit)} 입니다.",
+                "금액으로 환산하지 않았습니다. 건당 금액을 적어 둔 항목이 없습니다 "
+                "(단가 미확보).",
+            ],
+        }
+
+    # ── 추세 — 관련 지표의 최근 12개월 ─────────────────────────────────
+    name = topic.get("지표") or config.MAIN_METRIC
+    m = monthly(tables)
+    s = m[name].dropna() if name in m.columns else pd.Series(dtype=float)
+    if s.empty:
+        ev["없는 이유"]["추세"] = f"{name} 의 월별 값이 없습니다"
+    else:
+        cut = pd.Period(config.VALID_UNTIL[:7], freq="M")
+        valid = [i for i in s.index if pd.Period(str(i), freq="M") <= cut]
+        th = config.THRESHOLDS.get(name, {})
+        ev["추세"] = {"지표": name, "값": s.tail(12),
+                      "유효 구간": valid,
+                      "경고": th.get("경고"), "위험": th.get("위험"),
+                      "형식": "%" if name in (config.MAIN_METRIC, "최종 합격률") else "n"}
+    return ev

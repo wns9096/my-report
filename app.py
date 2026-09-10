@@ -33,6 +33,10 @@ PAGES = {
                 icon=_icon(1) or ":material/insights:"),
         st.Page("screens/3_report.py", title="리포트",
                 icon=_icon(2) or ":material/description:"),
+        # 9주차 Day3 — 제안서가 독립 메뉴로 올라왔다. 어제까지는 리포트 화면
+        # 안의 임시 탭이었다. 기존 항목의 순서·이름은 건드리지 않고 끝에 붙인다.
+        st.Page("screens/5_proposal.py", title="제안서",
+                icon=_icon(2) or ":material/gavel:"),
     ],
     "기록": [
         st.Page("screens/4_archive.py", title="아카이브",

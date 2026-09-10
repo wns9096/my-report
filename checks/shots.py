@@ -33,11 +33,14 @@ SHOTS = [
     ("2_decomp.png", "/dashboard", None, "분해", "분해 — 감춘 칸은 값을 안 그린다"),
     ("2_verdict.png", "/dashboard", None, "게이트 2 · 출구", "판정과 게이트 2"),
     ("3_report.png", "/report", None, None, "리포트 — 사람이 쓰는 장과 인과 검사"),
-    # 9주차 Day2 — 제안서는 탭 안에 있다. 탭은 눌러야 보인다.
-    ("3_proposal.png", "/report", "제안서 (임시)", None,
-     "제안서 — 자동 절과 사람 절이 배지로 갈린다"),
-    ("3_proposal_human.png", "/report", "제안서 (임시)", "후보 — 자동으로",
-     "적용 — 후보는 자동, 고르는 것은 사람"),
+    # 9주차 Day3 — 제안서가 독립 메뉴로 나왔다. 기본값은 후보 목록이고,
+    # 주제를 골라야 문서가 조립된다. 둘 다 찍는다.
+    ("5_topics.png", "/proposal", None, None,
+     "제안서 — 주제 후보. 기각된 것도 목록에 남는다"),
+    ("5_proposal.png", "/proposal", None, "누구에게서 벌어집니까",
+     "고른 주제로 조립된 절 — 자동과 사람이 배지로 갈린다"),
+    ("5_request.png", "/proposal", None, "무엇을 결정해야 합니까",
+     "요청 — 결정 선택지 셋과 마지막 줄"),
     ("4_archive.png", "/archive", None, None, "아카이브 — 게이트 통과 기록"),
     # 깨뜨리기는 맨 마지막에 찍는다. 시험용 데이터가 세션에 남아
     # 뒤 화면까지 물들이기 때문이다.
@@ -74,10 +77,15 @@ def main():
                     # 탭 몸통은 둘 다 실행되지만 «보이는» 것은 하나다.
                     page.get_by_role("tab", name=tab).click()
                     page.wait_for_timeout(1500)
-                if name == "3_proposal_human.png":
-                    # 사람이 쓰는 절을 골라야 입력창이 뜬다. 목차 라디오로 고른다.
-                    page.get_by_text("적용", exact=True).first.click()
-                    page.wait_for_timeout(1500)
+                if name in ("5_proposal.png", "5_request.png"):
+                    # 주제를 골라야 문서가 나온다. selectbox 는 combobox 다.
+                    page.get_by_role("combobox").first.click()
+                    page.wait_for_timeout(700)
+                    opt = page.get_by_text("공고 경쟁도 칸 사이", exact=False)
+                    opt.last.click()
+                    page.wait_for_selector("text=무엇을 결정해야 합니까",
+                                           timeout=30000)
+                    _wait(page, 2500)
                 if name == "1_break.png":
                     # 깨뜨려 보기 자리를 펴고 첫 버튼을 실제로 누른다.
                     # expander 는 <details><summary> 라 summary 를 눌러야 한다.
@@ -97,10 +105,28 @@ def main():
                 if scroll:
                     # scroll_into_view_if_needed 는 «조금이라도 보이면» 안 움직인다.
                     # 화면 맨 아래에 걸쳐 있어도 안 움직여서 엉뚱한 곳을 찍었다.
-                    page.get_by_text(scroll, exact=False).first.evaluate(
-                        "e => e.scrollIntoView({block: 'start'})")
-                    page.mouse.wheel(0, -90)      # 제목이 맨 위에 붙지 않게
+                    # .first 는 목차 줄에 걸린다 — 본문의 그 절이 아니라
+                    # 화면 맨 위 «절 A → B → C» 캡션이 먼저 잡혔다.
+                    # 맨 위로 되돌린 뒤 Playwright 의 것으로 맞춘다.
+                    # scrollIntoView 는 «가장 가까운 스크롤 상자»를 움직이는데,
+                    # 그림이 iframe 으로 들어간 화면에서는 창이 안 움직여
+                    # 요청 절 대신 맨 위가 찍혔다. scroll_into_view_if_needed 는
+                    # 상자를 찾아 주지만 «조금이라도 보이면» 안 움직이므로,
+                    # 먼저 맨 위로 돌려 반드시 움직이게 한다.
+                    page.mouse.wheel(0, -20000)
+                    page.wait_for_timeout(400)
+                    # ★ 제목(heading)을 먼저 찾는다. 글자로만 찾으면 «감춰 둔
+                    #   입력창 라벨»이 잡힌다 — label_visibility="collapsed" 는
+                    #   DOM 에 남아 있고 안 보일 뿐이라, 거기로 맞추려다 30초
+                    #   기다리고 실패했다.
+                    head = page.get_by_role("heading", name=scroll)
+                    loc = (head.last if head.count()
+                           else page.get_by_text(scroll, exact=False).last)
+                    loc.scroll_into_view_if_needed()
                     page.wait_for_timeout(1200)
+                    loc.scroll_into_view_if_needed()
+                    page.mouse.wheel(0, -90)      # 제목이 맨 위에 붙지 않게
+                    page.wait_for_timeout(900)
                 page.screenshot(path=str(OUT / name))
                 print(f"  찍음  {name:<18} {label}")
             b.close()

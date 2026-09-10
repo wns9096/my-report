@@ -309,37 +309,51 @@ def r14_deploy_files():
                      f"({pkg.read_text(encoding='utf-8').split() if pkg.exists() else []})")
 
 
-def r15_proposal_split():
-    """제안서도 리포트와 같은 원칙으로 나뉘어 있는가 (9주차 Day2).
+def r15_proposal_split(tables):
+    """제안서도 리포트와 같은 원칙으로 나뉘어 있는가 (9주차 Day2에 세우고 Day3에 고침).
 
     규칙 4는 리포트의 사람이 쓰는 장을 봤다. 제안서는 다른 파일이라 규칙 4가
     닿지 않는다 — 도구가 안 건드린 곳은 안 본다. 그래서 같은 것을 여기서도 본다.
 
-    셋을 본다.
-      · 사람이 쓰는 절을 비워 두면 정말 비어 있는가 (자동으로 안 채우는가)
+    ★ Day3 에 제안서 구조가 통째로 바뀌면서 이 규칙이 옛 함수 모양을 부르고
+      있었다. 규칙도 코드라서 같이 낡는다.
+
+    넷을 본다.
+      · 사람이 쓰는 절이 **정확히 둘**인가. 셋이면 자동화가 덜 됐고,
+        없으면 책임질 사람이 없는 문서다
+      · 안 썼는데 본문이 채워지지 않는가 (자동으로 안 채우는가)
       · 화면이 kind 로 분기하는가. 제목으로 분기하면 절이 늘 때 화면도 고쳐야 한다
       · 인과 표현 검사를 새로 만들지 않고 재사용했는가
     """
+    from core import metrics
     from report import proposal as PR
     bad = []
 
-    secs = PR.build(PR.load_cards(), human=None)
-    for s in secs:
-        if s["kind"] == "human" and s["body"] != S.NOT_WRITTEN:
-            bad.append(f"«{s['title']}» 를 안 썼는데 본문이 채워졌다")
-    if not [s for s in secs if s["kind"] == "human"]:
-        bad.append("사람이 쓰는 절이 하나도 없다 — 전부 자동이면 책임의 주체가 없다")
+    cards = PR.load_cards()
+    topics = metrics.proposal_topics(tables)
+    topic = next((x for x in topics if not x["기각사유"]), topics[0])
+    secs = PR.build(topic, metrics.topic_evidence(tables, topic), cards, {})
 
-    src = (ROOT / "screens" / "3_report.py").read_text(encoding="utf-8")
-    if 'sec["kind"] == "auto"' not in src:
+    human = [s for s in secs if s["kind"] == "human"]
+    if len(human) != 2:
+        bad.append(f"사람이 쓰는 절이 {len(human)}개다 — 둘이어야 한다")
+    for s in human:
+        # 사람이 쓴 글은 «사람글» 하나에만 있다. 자동으로 붙는 줄(규모·선택지)은
+        # «문장» 에 있고 그건 채워져 있어도 된다 — 그건 사람이 쓴 것이 아니다.
+        if s.get("사람글") != S.NOT_WRITTEN:
+            bad.append(f"«{s['제목']}» 를 안 썼는데 본문이 채워졌다")
+    if len(secs) > 7:
+        bad.append(f"절이 {len(secs)}개다 — 일곱을 넘으면 안 읽힌다")
+
+    src = (ROOT / "screens" / "5_proposal.py").read_text(encoding="utf-8")
+    if 'kind"] == "auto"' not in src:
         bad.append("화면이 kind 로 분기하지 않는다")
     if PR.check_phrasing is not S.check_phrasing:
         bad.append("인과 표현 검사를 새로 만들었다 — sections.py 것을 쓴다")
 
     return note("15 제안서 자동/사람 분리", not bad,
                 "; ".join(bad) if bad
-                else f"절 {len(secs)}개 중 사람이 쓰는 절 "
-                     f"{sum(1 for s in secs if s['kind'] == 'human')}개 · "
+                else f"절 {len(secs)}개 중 사람이 쓰는 절 {len(human)}개 · "
                      f"검사는 재사용")
 
 
@@ -362,7 +376,7 @@ def main():
     r12_reason_kind()
     r13_no_redistributable()
     r14_deploy_files()
-    r15_proposal_split()
+    r15_proposal_split(tables)
 
     width = max(len(f["규칙"]) for f in FINDINGS)
     print()

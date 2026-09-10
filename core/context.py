@@ -8,7 +8,7 @@ import pandas as pd
 
 from core import config, metrics, validate, verdict
 
-GRAIN_KO = {"person": "지원자 1명", "application": "지원 1건"}
+GRAIN_KO = metrics.GRAIN_UNIT      # 이름의 원본은 metrics 하나다
 MANUAL_LIMITS_PATH = config.OUT / "limits_manual.txt"
 
 
