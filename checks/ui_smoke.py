@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""4개 화면이 실제로 열리는지, 게이트 버튼이 실제로 눌리는지 확인한다.
+"""화면 다섯이 실제로 열리는지, 게이트 버튼이 실제로 눌리는지 확인한다.
 
 streamlit.testing.v1.AppTest 는 실제 Streamlit 런타임으로 app.py 를 실행한다.
 직접 만든 가짜 객체가 아니라 진짜 렌더 트리를 돌려준다.
@@ -9,6 +9,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
 
 from streamlit.testing.v1 import AppTest  # noqa: E402
 

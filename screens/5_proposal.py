@@ -126,8 +126,12 @@ choice = st.selectbox(
 if choice == ALL:
     st.caption("하나만 뽑으면 그날 눈에 띈 것이 그대로 이번 분기의 우선순위가 "
                "됩니다. 뽑을 수 있는 만큼 뽑아 놓고 고릅니다.")
+    # 높이를 열어 둔다. 기본 높이면 열여덟 중 열하나만 보이고 나머지는
+    # 스크롤 안에 숨는다 — «뽑을 수 있는 만큼 뽑아 놓고 고른다» 는 화면인데
+    # 절반이 안 보이면 결국 위에 뜬 것을 고르게 된다.
     st.dataframe(_topic_table(topics), hide_index=True,
                  use_container_width=True,
+                 height=(len(topics) + 1) * 35 + 3,
                  column_config={"규모(연간)": st.column_config.NumberColumn(
                      "규모(연간)", format="localized")})
     st.stop()

@@ -18,6 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
+
 from core import config  # noqa: E402
 from checks.day1_break import CARD_BLOCK  # noqa: E402
 from checks.ui_smoke import run  # noqa: E402

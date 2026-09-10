@@ -64,11 +64,40 @@ def _tw(s, fs=FS):
     return sum((fs if ord(c) > 0x2000 else fs * 0.55) for c in str(s))
 
 
+CAP_FS = 10.5
+CAP_LH = 13.5
+
+
+def _cap_lines(caption, w=W, fs=CAP_FS):
+    """caption 을 그림 폭에 맞춰 자른다.
+
+    ★ SVG 의 <text> 는 스스로 안 접힌다. 한 줄로 두었더니 캡션이 긴 그림에서
+      글자가 그림 밖으로 762px 까지 삐져나갔고, 종이에 얹으니 A4 밖으로
+      나갔다. 화면에서는 넓어서 안 보였다 — 폭은 재 봐야 안다.
+    """
+    lines, cur = [], ""
+    for word in str(caption).split(" "):
+        cand = f"{cur} {word}".strip()
+        if cur and _tw(cand, fs) > w:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = cand
+    if cur:
+        lines.append(cur)
+    return lines
+
+
 def _wrap(inner, w, h, caption):
     """SVG 껍데기. caption 은 그림 안 맨 아래에 넣는다 —
-    그림과 caption 이 따로 떨어지면 옮겨 붙일 때 caption 만 빠진다."""
-    cap = (f'<text x="0" y="{h - 4}" font-size="10.5" fill="currentColor" '
-           f'opacity=".62">{_esc(caption)}</text>') if caption else ""
+    그림과 caption 이 따로 떨어지면 옮겨 붙일 때 caption 만 빠진다.
+    caption 이 여러 줄이면 그만큼 그림을 키운다. 안 키우면 잘린다."""
+    lines = _cap_lines(caption, w) if caption else []
+    h = h + max(0, len(lines) - 1) * CAP_LH
+    cap = "".join(
+        f'<text x="0" y="{h - 4 - (len(lines) - 1 - i) * CAP_LH:.1f}" '
+        f'font-size="{CAP_FS}" fill="currentColor" opacity=".62">'
+        f'{_esc(ln)}</text>' for i, ln in enumerate(lines))
     # height="auto" 는 SVG 속성이 아니다 — 브라우저가 무시하고 기본 높이를
     # 써서 그림 위아래로 빈 자리가 크게 남았다. 실제로 그렇게 찍혔다.
     # 비율은 viewBox 가 정하게 두고 크기는 CSS 로 준다.
@@ -123,8 +152,21 @@ def _bars(rows, caption, unit=""):
 
 
 def funnel_svg(현황):
-    """단계별 도달 막대. 병목 구간의 «도착 단계» 하나만 강조색."""
-    f, worst, unit = 현황["표"], 현황["병목"], 현황["단위"]
+    """단계별 도달 막대. 강조색은 **이 문서가 말하는 구간**의 도착 단계 하나.
+
+    ★ 예전에는 늘 전역 병목을 칠했다. 본문은 «서류 통과 → 면접 통과» 를
+      말하는데 그림은 «면접 통과 → 최종 합격» 을 칠하니, 문장과 그림이
+      서로 다른 칸을 가리켰다. 그림 하나에 문장 하나라는 규칙은 그 둘이
+      «같은 것»을 말할 때만 뜻이 있다.
+    """
+    f, unit = 현황["표"], 현황["단위"]
+    fo = 현황.get("초점")
+    # 초점 구간이 퍼널 한 칸으로 안 잡히면(여러 칸을 건너뛰는 구간) 병목을 쓴다.
+    mark = 현황["병목"]
+    if fo:
+        hit = [i for i in range(1, len(f)) if f.iloc[i]["구간"] == fo["구간"]]
+        mark = hit[0] if hit else mark
+    worst = mark
     rows = []
     for i, r in f.iterrows():
         # pandas 는 None 이 아니라 NaN 을 돌려준다. `is None` 으로 보면
@@ -134,8 +176,10 @@ def funnel_svg(현황):
         rows.append((str(r["단계"]), float(r["인원"]),
                      f"{int(r['인원']):,}{unit}{prev}",
                      ACCENT if i == worst else BASE))
-    cap = (f"세는 단위 {현황['그레인']} · 강조한 칸이 병목 구간"
-           f"({현황['병목 구간']})의 도착 단계입니다")
+    구간 = fo["구간"] if fo else 현황["병목 구간"]
+    말 = "이 문서가 다루는 구간" if fo else "병목 구간"
+    cap = (f"세는 단위 {현황['그레인']} · 강조한 칸이 {말}"
+           f"({구간})의 도착 단계입니다")
     return _bars(rows, cap, unit)
 
 
@@ -158,6 +202,12 @@ def gap_svg(원인):
     cap = (f"{원인['구간']} 구간 · 축 {원인['축']} · 값은 전환율(%)입니다")
     if hidden:
         cap += f" · 표본이 모자란 {hidden}칸은 그리지 않았습니다"
+    if 원인.get("미분류"):
+        # ★ 미분류 칸이 눈에 보이는 최저인데 강조는 다른 칸에 가 있으면,
+        #   그림이 본문을 반박하는 것처럼 보인다. 지우지 않고 적어 둔다 —
+        #   그림에서 빼면 그건 감추는 것이다.
+        cap += (f" · 「{원인['미분류칸']}」 칸은 값을 안 적어 둔 것이라 "
+                f"최고·최저에서 뺐습니다")
     return _bars(rows, cap, "%")
 
 

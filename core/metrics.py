@@ -266,6 +266,29 @@ def monthly(tables):
 # ══════════════════════════════════════════════════════════════════════════
 # Day3 실습 A — 분해
 # ══════════════════════════════════════════════════════════════════════════
+# 축 값이 비어 있는 행을 담는 칸. 칸 이름이지 «누구»가 아니다 —
+# 원인 절에서 최고·최저로 지목하지 않는다. 표에는 그대로 남는다.
+UNCLASSIFIED = "(미분류)"
+
+# 지표가 재고 있는 퍼널 구간. 여기 없는 지표는 구간이 아니라 평균이다 —
+# 평균에는 «어느 칸에서 빠지는가»가 없으니 쪼갤 구간도 없다.
+# ★ 그레인을 같이 적는다. 서류 통과율은 «건» 으로 재고 최종 합격률은 «명»
+#   으로 잰다. 구간만 맞춰 놓았더니, 명 기준 문서(축:학력, 79.2%)에 건 기준
+#   서류 통과율 추세(18.1%)가 붙어서 한 문서에 «서류 통과율» 이 둘이 됐다.
+METRIC_SPAN = {
+    config.MAIN_METRIC: ("application",
+                         (config.FUNNEL_STEPS[0], config.FUNNEL_STEPS[1])),
+    "최종 합격률": ("person",
+                    (config.FUNNEL_STEPS[0], config.FUNNEL_STEPS[-1])),
+}
+
+
+def _metric_grain(name):
+    """지표를 어느 단위로 재는가. 표에 없는 지표는 기본 그레인이다."""
+    got = METRIC_SPAN.get(name)
+    return got[0] if got else config.GRAIN
+
+
 AXES = {
     "학력":        ("applicants", "education"),
     "산업":        ("applications", "industry"),
@@ -379,7 +402,7 @@ def funnel_by(tables, axis, start=None, end=None):
 
     reach = p[[c for c in (start, end) if c in p.columns]].notna()
     m = src.merge(reach, left_on=key, right_index=True, how="inner")
-    m[col] = m[col].fillna("(미분류)")
+    m[col] = m[col].fillna(UNCLASSIFIED)
 
     g = m.groupby(col).agg(시작=(start, "sum"), 도달=(end, "sum")).reset_index()
     g = g.rename(columns={col: "칸"})
@@ -595,8 +618,14 @@ def proposal_topics(tables):
             f"임계값:{name}", "임계값", f"{name} 임계값",
             f"{name} 현재 {shown} 입니다. {level or '경고'}선 {shown_b} 를 "
             f"{'밑돕니다' if level else '넘습니다'} (표본 {k[name]['표본']:,}).",
-            size, grain=k[name]["설명"], reject=reject,
-            지표=name, 현재=v, 기준=base, 수준=level))
+            # ★ «세는 단위» 칸에 지표 설명(«106명 / 520명 (사람 기준)»)을
+            #   넣었더니 문서 머리글에 계산식이 그대로 찍혔다. 단위 칸에는
+            #   단위를 넣는다. 설명은 현황 문장이 이미 말한다.
+            size, grain=GRAIN_UNIT[_metric_grain(name)], reject=reject,
+            지표=name, 현재=v, 기준=base, 수준=level,
+            # ★ 보이는 글자는 만드는 자리가 하나여야 한다. 문서에서 다시
+            #   서식을 매기면 화면 0.1806 · 문서 18.1% 로 갈린다.
+            표시=shown, 기준표시=shown_b, 표본=k[name]["표본"]))
 
     # ── ④ 추세 — 최근 N개월이 직전 N개월보다 떨어졌는가 ────────────────
     m = monthly(tables)
@@ -626,13 +655,52 @@ def proposal_topics(tables):
             f"추세:{name}", "추세", f"{name} 최근 {n}개월 변화",
             f"{name} 최근 {n}개월 평균이 {shown} 입니다. "
             f"견준 구간은 {s.index[-2 * n]} ~ {s.index[-1]} 입니다.",
-            size, grain=k[name]["설명"], reject=reject,
-            지표=name, 최근=rec, 직전=prv, 하락=drop))
+            size, grain=GRAIN_UNIT[_metric_grain(name)], reject=reject,
+            지표=name, 최근=rec, 직전=prv, 하락=drop,
+            표시=shown, 개월=n, 견준구간=f"{s.index[-2 * n]} ~ {s.index[-1]}",
+            변화표시=(f"{_pp(abs(drop))}%p" if ratio else f"{abs(drop):.3f}"),
+            방향=("떨어졌습니다" if drop > 0 else "올랐습니다")))
 
     # 규모가 큰 순서로. 기각된 것은 맨 뒤로 보내되 지우지 않는다.
     out.sort(key=lambda d: (d["기각사유"] is not None,
                             -(d["규모_연간건수"] or 0)))
     return out
+
+
+def _span_pair(span):
+    """«A → B» 를 (A, B) 로. 구간이 없으면 (None, None) — 그러면 첫 구간이다."""
+    if not span:
+        return (None, None)
+    a, _, b = str(span).partition("→")
+    return (a.strip() or None, b.strip() or None)
+
+
+def _topic_span(topic):
+    """이 주제가 말하는 구간. 없으면 None.
+
+    구간 주제와 분해 축 주제는 «구간» 에 박혀 있다. 임계값·추세 주제는 지표가
+    재고 있는 구간을 찾아 쓴다 — 지표가 평균이면 구간이 없다.
+    """
+    if topic.get("구간"):
+        return topic["구간"]
+    got = METRIC_SPAN.get(topic.get("지표"))
+    return f"{got[1][0]} → {got[1][1]}" if got else None
+
+
+def _topic_metric(topic):
+    """이 주제의 지표. 추세를 보여도 되는 지표인지를 여기서 정한다.
+
+    ★ 예전에는 지표가 없으면 무조건 주지표(서류 통과율)로 떨어뜨렸다. 그래서
+      «면접 통과 → 최종 합격» 을 다루는 문서에도, «고용 형태» 를 다루는
+      문서에도 서류 통과율 추세가 똑같이 붙었다. 주제와 상관없는 그림이다.
+    """
+    if topic.get("지표"):
+        return topic["지표"]
+    span, grain = _span_pair(_topic_span(topic)), _grain_of(topic)
+    for name, (g, sp) in METRIC_SPAN.items():
+        if sp == span and g == grain:
+            return name
+    return None
 
 
 def _grain_of(topic):
@@ -642,21 +710,28 @@ def _grain_of(topic):
     if topic["키"].startswith("축:"):
         axis = topic["키"].split(":", 1)[1]
         return "person" if AXES[axis][0] == "applicants" else "application"
-    return config.GRAIN
+    # ★ 임계값·추세 주제는 지표가 재는 단위를 따른다. 예전에는 기본 그레인
+    #   (명)으로 떨어뜨려서, 서류 통과율(건 기준 18.1%)을 다루는 문서가
+    #   명 기준 퍼널(79.2%)을 같이 실었다. 한 문서에 같은 이름의 값이 둘이었다.
+    got = METRIC_SPAN.get(topic.get("지표"))
+    return got[0] if got else config.GRAIN
 
 
 def _cause_axis(tables, grain, span=None):
     """이 그레인으로 쪼갤 수 있는 축 중 격차가 가장 큰 것.
 
     그레인이 다른 축으로 쪼개면 분모가 달라져 견줄 수 없다. 그래서 먼저 거른다.
+    구간도 그대로 넘긴다 — 받아 놓고 안 쓰던 인자였다. 그래서 주제가 말하는
+    구간과 문서가 쪼개는 구간이 달랐다.
     """
     from core import verdict as _v
+    start, end = _span_pair(span)
     best = None
     for axis in AXES:
         if ("person" if AXES[axis][0] == "applicants" else "application") != grain:
             continue
         try:
-            g = _v.decomp_with_trust(tables, axis)
+            g = _v.decomp_with_trust(tables, axis, start=start, end=end)
         except KeyError:
             continue
         ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
@@ -695,8 +770,24 @@ def topic_evidence(tables, topic):
          "전환율": float(f.iloc[i]["직전 대비"]),
          "첫 단계 대비": float(f.iloc[i]["누적"])}
         for i in range(1, len(f))])
+    # ★ 이 주제가 말하는 구간을 «초점» 으로 따로 잡는다. 예전에는 초점 없이
+    #   늘 병목만 실어서, 다른 구간을 다루는 문서도 첫 줄이 병목 이야기였다.
+    #   퍼널에 없는 구간(지원 → 최종 합격 처럼 여러 칸을 건너뛰는 것)이면
+    #   초점은 None 이고, 그때는 병목을 그대로 쓴다.
+    span = _topic_span(topic)
+    focus = None
+    if span is not None:
+        hit = [i for i in range(1, len(f)) if f.iloc[i]["구간"] == span]
+        if hit:
+            i = hit[0]
+            focus = {"구간": span,
+                     "시작": f.iloc[i - 1]["단계"], "끝": f.iloc[i]["단계"],
+                     "전환율": float(f.iloc[i]["직전 대비"]),
+                     "분모": int(f.iloc[i - 1]["인원"]),
+                     "도달": int(f.iloc[i]["인원"]),
+                     "병목인가": i == worst}
     ev["현황"] = {"표": f, "구간표": span_tbl, "병목": worst, "단위": unit,
-                  "그레인": GRAIN_UNIT[grain],
+                  "그레인": GRAIN_UNIT[grain], "초점": focus,
                   "병목 구간": f.iloc[worst]["구간"],
                   "병목 전환율": float(f.iloc[worst]["직전 대비"]),
                   "병목 분모": int(f.iloc[worst - 1]["인원"]),
@@ -705,26 +796,43 @@ def topic_evidence(tables, topic):
     # ── 원인 — 그 주제의 분해 축 표 ────────────────────────────────────
     axis = topic.get("근거축")
     got = None
-    if axis:
-        from core import verdict as _v
-        got = (axis, None, _v.decomp_with_trust(tables, axis))
-    else:
-        got = _cause_axis(tables, grain, topic.get("구간"))
-    if got is None:
+    if span is None:
+        # 구간이 없는 주제(평균 지표)는 쪼갤 것이 없다. 첫 구간을 대신
+        # 쪼개서 «원인» 이라고 부르면 그건 다른 이야기를 적는 것이다.
         ev["없는 이유"]["원인"] = (
-            f"{GRAIN_UNIT[grain]} 단위로 쪼갤 수 있는 축 중 믿을 수 있는 칸이 "
-            f"둘 이상인 것이 없습니다")
+            f"{topic.get('지표') or topic['제목']} — 비율이 아니라 평균입니다. "
+            f"어느 칸에서 빠지는지가 없어 쪼갤 구간이 없습니다")
+    elif axis:
+        from core import verdict as _v
+        got = (axis, None, _v.decomp_with_trust(tables, axis, *_span_pair(span)))
     else:
+        got = _cause_axis(tables, grain, span)
+    if got is None and "원인" not in ev["없는 이유"]:
+        ev["없는 이유"]["원인"] = (
+            f"{span} 구간을 {GRAIN_UNIT[grain]} 단위로 쪼갤 수 있는 축 중 "
+            f"믿을 수 있는 칸이 둘 이상인 것이 없습니다")
+    if got is not None:
         a, _gap, g = got
         ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
+        # ★ «(미분류)» 는 칸이 아니라 «안 적어 둔 것» 이다. 이 절이 답하는
+        #   질문은 «누구에게서 벌어집니까» 인데, 미분류는 누구가 아니다.
+        #   지우지는 않는다 — 표에는 그대로 두고 지목만 하지 않는다.
+        named = ok.loc[ok["칸"] != UNCLASSIFIED]
+        pick = named if len(named) >= 2 else ok
         g = g.copy()
         g["표시"] = ""
-        if len(ok) >= 2:
-            g.loc[ok["전환율"].idxmax(), "표시"] = "최고"
-            g.loc[ok["전환율"].idxmin(), "표시"] = "최저"
+        if len(pick) >= 2:
+            g.loc[pick["전환율"].idxmax(), "표시"] = "최고"
+            g.loc[pick["전환율"].idxmin(), "표시"] = "최저"
         ev["원인"] = {
-            "축": a, "표": g, "단위": "명" if AXES[a][0] == "applicants" else "건",
-            "구간": f"{config.FUNNEL_STEPS[0]} → {config.FUNNEL_STEPS[1]}",
+            "축": a, "표": g,
+            # 그려진 것만 센다. 표본이 모자라 아예 안 그린 미분류를 두고
+            # «최고·최저에서 뺐습니다» 라고 적으면, 읽는 사람은 있지도 않은
+            # 막대를 찾는다.
+            "미분류": int(((g["칸"] == UNCLASSIFIED) & g["사유"].isna()
+                           & g["전환율"].notna()).sum()),
+            "미분류칸": UNCLASSIFIED, "단위": "명" if AXES[a][0] == "applicants" else "건",
+            "구간": span,
             "최고": g.loc[g["표시"] == "최고"].iloc[0].to_dict() if (g["표시"] == "최고").any() else None,
             "최저": g.loc[g["표시"] == "최저"].iloc[0].to_dict() if (g["표시"] == "최저").any() else None,
             "감춘 칸": g.loc[g["사유"].notna(), ["칸", "시작", "사유"]],
@@ -745,16 +853,31 @@ def topic_evidence(tables, topic):
                 f"({years:.2f}년)으로 나눠 한 해분으로 환산했습니다.",
                 f"분모는 그 구간·칸에 실제로 진입한 "
                 f"{topic.get('분모', 0):,}{topic.get('단위', unit)} 입니다.",
+                # ★ 견준 대상을 안 적으면 «낮다»의 기준이 문서 밖에 있다.
+                #   더 중요한 것은, 거기까지 갈 수 있다고 «본» 것이지
+                #   갈 수 있음을 «잰» 것이 아니라는 점이다.
+                # «이(가)» 같은 양쪽 표기는 안 쓴다. 사람이 안 쓰는 말이다 —
+                # 이름이 무엇이든 붙는 «쪽» 으로 문장을 짠다.
+                (f"견준 대상은 {topic.get('높은')} 입니다. "
+                 f"{topic.get('낮은')} 쪽이 거기까지 올라갈 수 있다고 보고 "
+                 f"낸 값이지, 올라갈 수 있음을 잰 값이 아닙니다."
+                 if topic.get("높은") and topic.get("낮은") else
+                 "견준 대상을 따로 두지 않았습니다."),
                 "금액으로 환산하지 않았습니다. 건당 금액을 적어 둔 항목이 없습니다 "
                 "(단가 미확보).",
             ],
         }
 
     # ── 추세 — 관련 지표의 최근 12개월 ─────────────────────────────────
-    name = topic.get("지표") or config.MAIN_METRIC
+    name = _topic_metric(topic)
     m = monthly(tables)
-    s = m[name].dropna() if name in m.columns else pd.Series(dtype=float)
-    if s.empty:
+    s = (m[name].dropna() if name and name in m.columns
+         else pd.Series(dtype=float))
+    if name is None:
+        ev["없는 이유"]["추세"] = (
+            f"{span or topic['제목']} 을(를) 달마다 잰 값이 없습니다. "
+            f"다른 지표의 추세를 대신 싣지 않습니다")
+    elif s.empty:
         ev["없는 이유"]["추세"] = f"{name} 의 월별 값이 없습니다"
     else:
         cut = pd.Period(config.VALID_UNTIL[:7], freq="M")

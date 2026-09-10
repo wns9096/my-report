@@ -9,4 +9,6 @@ fonts/*.ttf
 
 outputs/*.png
 outputs/*.pdf
+# doc_print.py 가 종이 폭을 재려고 잠깐 만드는 자리. 산출물이 아니다.
+outputs/_print/
 !outputs/gates.jsonl

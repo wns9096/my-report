@@ -4,19 +4,17 @@
 문서는 손으로 쓴다. 손으로 쓴 숫자는 반드시 어긋난다 —
 그래서 문서도 검사 대상이다.
 """
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-# 출력이 한글이다. cp949 콘솔(예: cmd.exe)에서 그대로 찍으면
-# UnicodeEncodeError 로 죽는다 — 검사가 아니고 출력이 이유로 죽는 것은
-# 맨 머리에서 막는다. 사람이 결과를 볼 수 없으면 검사를 돌린 것이 아니다.
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except (AttributeError, OSError):
-    pass
-
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
 
 STEPS = [
     ("Day1 실습 E — 깨뜨려 보기 (차단·버튼 잠김)", "checks/day1_break.py"),
@@ -35,10 +33,32 @@ STEPS = [
 ]
 
 
+def unguarded():
+    """출력을 안 지키는 검사 스크립트를 찾는다.
+
+    검사를 돌리기 전에 먼저 본다. 새로 만든 스크립트가 이 한 줄을 빠뜨리면
+    cp949 콘솔에서 «검사 실패»로 보이는데, 실은 검사가 아니라 print 가
+    죽은 것이다. 그 자리를 두 번 헤맸으므로 사람이 기억하지 않게 만든다.
+    """
+    return [s for _, s in STEPS
+            if "use_utf8" not in (ROOT / s).read_text(encoding="utf-8")]
+
+
 def main():
+    bare = unguarded()
+    if bare:
+        print("[걸림] 출력을 안 지키는 검사 — " + " · ".join(bare))
+        print("       checks/_console.py 의 use_utf8() 을 맨 앞에서 부른다.")
+        return 1
+
+    # ★ 자식의 출력 인코딩도 cp949 다. 부모가 utf-8 로 «읽는» 것만으로는
+    #   모자라고, 자식이 utf-8 로 «쓰게» 해야 한다. 스크립트 안의 use_utf8()
+    #   와 겹치지만 겹치는 편이 낫다 — 둘 중 하나만으로는 한쪽 경로가 뚫린다.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8:replace")
+
     bad = []
     for label, script in STEPS:
-        r = subprocess.run([sys.executable, script], cwd=ROOT,
+        r = subprocess.run([sys.executable, script], cwd=ROOT, env=env,
                            capture_output=True, text=True, encoding="utf-8",
                            errors="replace")
         mark = "통과" if r.returncode == 0 else "실패"

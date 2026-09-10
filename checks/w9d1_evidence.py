@@ -23,6 +23,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
+
 from core import config, context, loader, metrics, validate  # noqa: E402
 
 pd.set_option("display.width", 200)

@@ -149,10 +149,17 @@ def cards(tables):
     return out
 
 
-def decomp_with_trust(tables, axis=None):
-    """분해 결과에 못 믿을 조건을 건다. 걸린 칸은 전환율을 지운다."""
+def decomp_with_trust(tables, axis=None, start=None, end=None):
+    """분해 결과에 못 믿을 조건을 건다. 걸린 칸은 전환율을 지운다.
+
+    ★ 쪼갤 구간을 받는다. 안 주면 첫 구간이다. 예전에는 받지도 않아서 어느
+      구간을 다루는 문서든 늘 첫 구간을 쪼개 놓고 «이 구간»이라고 적었다 —
+      «면접 통과 → 최종 합격이 가장 낮습니다» 다음 줄에 «지원 → 서류 통과
+      구간을 학력으로 나누면» 이 붙었다. funnel_by 는 처음부터 구간을 받을 수
+      있었는데 여기서 안 넘겨서 생긴 일이다.
+    """
     axis = axis or config.DECOMP_AXIS
-    g = metrics.funnel_by(tables, axis)
+    g = metrics.funnel_by(tables, axis, start=start, end=end)
     g["사유"] = [metrics.trust_check(sample=int(n)) for n in g["시작"]]
     g.loc[g["사유"].notna(), ["도달", "전환율"]] = None
     return g

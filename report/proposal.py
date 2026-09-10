@@ -168,9 +168,10 @@ def _josa(word, pair=("은", "는")):
         return pair[1]
     if "가" <= ch <= "힣":
         return pair[0] if (ord(ch) - 0xAC00) % 28 else pair[1]
-    # 숫자는 읽는 소리로 본다 — 1(일) 3(삼) 6(육) 7(칠) 8(팔) 에 받침이 있다.
+    # 숫자는 읽는 소리로 본다 — 0(영·공, 정수면 십·백) 1(일) 3(삼) 6(육)
+    # 7(칠) 8(팔) 에 받침이 있다. 0 을 빠뜨려서 «0.480를» 이 나왔다.
     if ch.isdigit():
-        return pair[0] if ch in "13678" else pair[1]
+        return pair[0] if ch in "013678" else pair[1]
     return pair[1]
 
 
@@ -180,20 +181,56 @@ def _gap_pp(hi, lo):
 
 
 def _s_현황(topic, ev, cards, human):
+    """이 절은 **주제가 말하는 것**을 먼저 적는다.
+
+    ★ 예전에는 주제와 상관없이 늘 «가장 낮은 구간»부터 적었다. 그래서
+      «면접 통과 → 최종 합격» 을 다루는 문서도, «월 지원 건수 임계값» 을
+      다루는 문서도 첫 줄이 똑같았다. 임계값 넷과 추세 넷은 여덟 문서가
+      글자 하나 안 다른 같은 문서였다 — 제목만 달랐다.
+    """
     h = ev.get("현황")
     if not h:
         return None
     f, unit, w = h["표"], h["단위"], h["병목"]
-    return {
-        "문장": [
+    n = len(f) - 1
+    fo, 갈래 = h.get("초점"), topic.get("갈래")
+    문장, 차트 = [], pcharts.funnel_svg(h)
+
+    if 갈래 == "임계값":
+        수준 = topic.get("수준")
+        문장.append(
+            f"{topic['지표']}{_josa(topic['지표'])} 지금 {topic['표시']}입니다 "
+            f"(표본 {topic.get('표본', 0):,}). "
+            f"{수준 or '경고'}선 {topic['기준표시']}"
+            f"{_josa(topic['기준표시'], ('을', '를'))} "
+            f"{'밑돕니다' if 수준 else '넘습니다'}.")
+    elif 갈래 == "추세":
+        문장.append(
+            f"{topic['지표']}{_josa(topic['지표'])} 최근 {topic['개월']}개월 "
+            f"평균이 {topic['표시']}입니다. 견준 구간은 "
+            f"{topic['견준구간']}입니다.")
+        문장.append(f"직전 {topic['개월']}개월보다 "
+                    f"{topic['변화표시']} {topic['방향']}.")
+    elif fo:
+        문장.append(
+            f"{fo['시작']} {fo['분모']:,}{unit} 가운데 {fo['끝']}까지 가는 것은 "
+            f"{fo['도달']:,}{unit}입니다 (전환율 {_pp(fo['전환율'])}%).")
+    else:
+        문장.append(
             f"{f.iloc[w - 1]['단계']} {h['병목 분모']:,}{unit} 가운데 "
-            f"{f.iloc[w]['단계']}까지 가는 것은 {h['병목 도달']:,}{unit}입니다.",
-            f"구간 {len(f) - 1}개 가운데 {h['병목 구간']} 전환율 "
-            f"{_pp(h['병목 전환율'])}%가 가장 낮습니다.",
-        ],
-        "차트": pcharts.funnel_svg(h),
-        "표": h["구간표"],
-    }
+            f"{f.iloc[w]['단계']}까지 가는 것은 {h['병목 도달']:,}{unit}입니다.")
+
+    # 퍼널 그림에는 대응하는 문장이 있어야 한다 — 이 줄이 그 문장이다.
+    if fo and fo["병목인가"]:
+        문장.append(f"구간 {n}개 가운데 이 구간 전환율 "
+                    f"{_pp(fo['전환율'])}%가 가장 낮습니다.")
+    else:
+        문장.append(f"구간 {n}개 가운데 가장 낮은 것은 {h['병목 구간']} "
+                    f"{_pp(h['병목 전환율'])}%입니다.")
+    out = {"문장": 문장[:3], "차트": 차트, "표": h["구간표"]}
+    if 갈래 in ("임계값", "추세"):
+        out["질문"] = config.word("질문", "현황:지표")
+    return out
 
 
 def _s_원인(topic, ev, cards, human):
@@ -210,8 +247,15 @@ def _s_원인(topic, ev, cards, human):
         f"{_gap_pp(hi['전환율'], lo['전환율'])}%p 벌어지고, 낮은 쪽이 이 구간에 "
         f"들어온 것의 {_pp(lo['비중'], 1)}%를 차지합니다.",
     ]
+    꼬리 = []
     if hidden:
-        문장.append(f"표본이 모자란 {hidden}칸은 값을 내지 않았습니다.")
+        꼬리.append(f"표본이 모자란 {hidden}칸은 값을 내지 않았습니다")
+    if c.get("미분류"):
+        # 표에는 남아 있다. 안 지목했을 뿐이라는 것을 문서가 말해야 한다.
+        꼬리.append(f"값을 안 적어 둔 「{c['미분류칸']}」 칸은 "
+                    f"높고 낮음을 견주지 않았습니다")
+    if 꼬리:
+        문장.append(" · ".join(꼬리) + ".")
     t = c["표"].loc[c["표"]["사유"].isna(), ["칸", "시작", "도달", "전환율", "비중"]]
     return {"문장": 문장, "차트": pcharts.gap_svg(c),
             "표": t.rename(columns={"시작": f"진입({unit})",
@@ -423,8 +467,11 @@ table { border-collapse:collapse; width:100%; font-size:9pt; margin:8px 0 0;
         page-break-inside:avoid; break-inside:avoid; }
 th, td { text-align:left; padding:5px 8px; border:0;
          border-bottom:1px solid var(--line); vertical-align:top; }
-/* 첫 열은 이름이다. 좁아져서 «구 분» 처럼 쪼개지지 않게 붙여 둔다. */
-th:first-child, td:first-child { white-space:nowrap; }
+/* 첫 열이 «이름» 인 표만 붙여 둔다 — 좁아져서 «구 분» 처럼 쪼개지지 않게.
+   ★ 처음에는 모든 표에 걸었더니, 첫 열이 긴 문장인 표(환산에 쓴 가정)가
+     한 줄로 늘어나 A4 밖으로 840px 까지 삐져나갔다. 화면에서는 안 보였다 —
+     화면이 넓었기 때문이다. 종이 폭으로 재 보고서야 나왔다. */
+table.kv th:first-child, table.kv td:first-child { white-space:nowrap; }
 th { background:var(--head); font-weight:600; color:var(--sub); }
 td.n, th.n { text-align:right; }
 .num { font-variant-numeric:tabular-nums; font-weight:700; }
@@ -457,6 +504,19 @@ def _mark(text) -> str:
         s)
 
 
+# 첫 열을 «이름» 으로 볼 글자 수 상한. 넘으면 문장이지 이름이 아니다.
+# 근거: 가장 긴 이름이 «면접 통과 → 최종 합격»(13자)이고, 가정 표의 첫 칸은
+#       100자가 넘는 문장이다. 그 사이 어디를 잘라도 같은 결과라 16으로 둔다.
+LABEL_MAX = 16
+
+
+def _is_kv(df) -> bool:
+    """첫 열이 이름 열인가. 표의 내용을 보고 정한다 — CSS 가 못 보는 것이다."""
+    first = df.columns[0]
+    vals = [str(first)] + [fmt_value(v, first) for v in df[first]]
+    return max(len(v) for v in vals) <= LABEL_MAX
+
+
 def _table_html(df) -> str:
     if df is None or len(df) == 0:
         return ""
@@ -470,7 +530,8 @@ def _table_html(df) -> str:
             cls = "n" if _numeric(df[c]) else ""
             tds.append(f'<td class="{cls}">{_cell(v, c)}</td>')
         body.append("<tr>" + "".join(tds) + "</tr>")
-    return (f'<table><thead><tr>{head}</tr></thead>'
+    cls = ' class="kv"' if _is_kv(df) else ""
+    return (f'<table{cls}><thead><tr>{head}</tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table>')
 
 

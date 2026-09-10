@@ -9,11 +9,16 @@
 
     python checks/w9d1_verify.py
 """
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
 
 from core import config, context, metrics  # noqa: E402
 from checks.w9d1_evidence import _shown, _shown_gap, load  # noqa: E402
@@ -126,6 +131,47 @@ def no_cause():
     return hits
 
 
+# 「크기와 순서」 표의 한 줄. 손으로 곱해 적은 자리라 특히 잘 어긋난다.
+_ROW = re.compile(
+    r"^\|\s*\d+\s+(?P<축>[^|]+?)\s*\|\s*(?P<격차>[\d.]+)%p\s*"
+    r"\|\s*(?P<비중>[\d.]+)%\s*\|\s*\**(?P<크기>[\d.]+)\**\s*"
+    r"\|\s*\+(?P<건수>[\d,]+)(?P<단위>건|명)\s*\|")
+
+
+def derived(text):
+    """문서에 «곱해서 적어 둔» 값을 다시 곱해 본다.
+
+    ★ 조회값 대조는 통과하는데 이 자리는 안 잡혔다. 조회한 값은 옮겨 적었고
+      **곱한 값은 손으로 곱했기** 때문이다. 세 줄이 틀려 있었다(2.75·0.55·0.13)
+      — 전부 반올림 전 값으로 곱한 것이다. 화면에 찍히는 값끼리 곱해야
+      읽는 사람이 암산으로 맞춰 볼 수 있다.
+    """
+    t = load()
+    years = metrics._period_years()
+    out = []
+    for ln in text.splitlines():
+        m = _ROW.match(ln.strip())
+        if not m:
+            continue
+        axis = m.group("축").strip()
+        if axis not in metrics.AXES:
+            continue
+        g = metrics.funnel_by(t, axis)
+        v = g.loc[g["전환율"].notna()]
+        hi, lo = v.loc[v["전환율"].idxmax()], v.loc[v["전환율"].idxmin()]
+        gap = round(_shown(hi["전환율"]) - _shown(lo["전환율"]), 1)
+        share = _shown(lo["비중"])
+        size = round(gap * share / 100, 2)
+        cnt = round(gap / 100 * int(lo["시작"]) / years)
+        for name, got, want in (("격차", float(m.group("격차")), gap),
+                                ("비중", float(m.group("비중")), share),
+                                ("크기", float(m.group("크기")), size),
+                                ("건수", float(m.group("건수").replace(",", "")),
+                                 float(cnt))):
+            out.append((f"{axis} {name}", got == want, got, want))
+    return out
+
+
 def main():
     if not DOC.exists():
         print(f"{DOC.name} 가 없다.")
@@ -144,6 +190,17 @@ def main():
             print(f"  · {lab} → «{s}»")
         return 1
     print(f"{len(rows)}개 전부 문서에 있다. 조회하지 않은 값은 없다.")
+
+    print("\n곱해서 적어 둔 값을 다시 곱한다 — 「크기와 순서」 표\n")
+    dv = derived(text)
+    for label, good, got, want in dv:
+        print(f"  {'같음' if good else '다름':<4} {label:<20} 문서 {got:<10} "
+              f"조회 {want}")
+    bad = [d for d in dv if not d[1]]
+    if bad:
+        print(f"\n어긋난 값 {len(bad)}개 — 고칠 쪽은 문서다.")
+        return 1
+    print(f"\n{len(dv)}개 전부 같다.")
     return 1 if no_cause() else 0
 
 

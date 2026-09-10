@@ -26,6 +26,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
+
 from core import config, loader, metrics, verdict  # noqa: E402
 from report import proposal as P  # noqa: E402
 from report import sections as S  # noqa: E402
@@ -72,6 +76,37 @@ def main():
        "「확인 필요」가 낱말 하나로 남지 않았다",
        "무엇을 · 누가 · 모르는 채로 할 수 있는 결정 셋")
 
+    # ★ 카드는 사람이 손으로 쓴다. 손으로 쓴 숫자는 반드시 어긋난다 —
+    #   Day1 에 발견.md 를 두고 배운 것을 카드에도 건다. 카드가 제안 절의
+    #   원본이라, 여기가 어긋나면 같은 문서 안에서 규모 절과 제안 절이
+    #   서로 다른 숫자를 말한다.
+    by_key = {x["키"]: x for x in topics}
+    card_num = []
+    for c in cards:
+        x = by_key.get(c.get("주제키"))
+        if not x:
+            continue
+        m = re.search(r"추정\s*\+([\d,]+)\s*(?:건|명)", c.get("효과", ""))
+        if m and x["규모_연간건수"] is not None:
+            got = int(m.group(1).replace(",", ""))
+            if got != x["규모_연간건수"]:
+                card_num.append(f"{c['제목']} 효과 +{got} "
+                                f"≠ 조회 {x['규모_연간건수']}")
+        m = re.match(r"([\d.]+)\s*\(격차\s*([\d.]+)%p\s*[×x]\s*"
+                     r"비중\s*([\d.]+)%\)", c.get("크기", ""))
+        if m and x.get("격차") is not None and x.get("비중") is not None:
+            gap, share = round(x["격차"] * 100, 1), round(x["비중"] * 100, 1)
+            want = round(gap * share / 100, 2)
+            if (float(m.group(1)) != want or float(m.group(2)) != gap
+                    or float(m.group(3)) != share):
+                card_num.append(
+                    f"{c['제목']} 크기 {m.group(1)}"
+                    f"(격차 {m.group(2)} × 비중 {m.group(3)}) "
+                    f"≠ 조회 {want}(격차 {gap} × 비중 {share})")
+    ok(not card_num, "카드에 손으로 쓴 숫자가 조회값과 같다",
+       " / ".join(card_num[:3]) or
+       "주제에 붙은 카드의 효과·크기를 다시 계산해서 견줬다")
+
     print("\n── 주제 후보 ──")
     ok(len(topics) >= 5, "후보가 다섯 이상이다", f"{len(topics)}개")
     rejected = [x for x in topics if x["기각사유"]]
@@ -97,10 +132,21 @@ def main():
        " / ".join(bad_size) or f"기간 {years:.2f}년으로 나눴다")
 
     print("\n── 절 구조 (후보 전부) ──")
-    worst = []
+    # 한 번만 조립해서 돌려 쓴다. 세 번 조립하면 세 번 다 같은 값이라는
+    # 보장이 없고, 느려지는 만큼 사람이 안 돌리게 된다.
+    built, blew = {}, []
     for x in topics:
-        ev = metrics.topic_evidence(t, x)
-        secs = P.build(x, ev, cards, P.human_for(x))
+        try:
+            ev = metrics.topic_evidence(t, x)
+            built[x["키"]] = (x, ev, P.build(x, ev, cards, P.human_for(x)))
+        except Exception as e:                      # noqa: BLE001
+            blew.append(f"{x['제목']} {type(e).__name__}: {e}")
+    ok(not blew, "후보 전부가 문서로 조립된다",
+       " / ".join(blew[:3]) or f"{len(built)}개 전부 — 하나만 열어 보면 "
+       f"나머지가 터지는지 모른다")
+
+    worst = []
+    for x, ev, secs in built.values():
         keys = [s["키"] for s in secs]
         if len(secs) > 7:
             worst.append(f"{x['제목']} 절 {len(secs)}개")
@@ -115,11 +161,59 @@ def main():
     ok(not worst, "절 7 이하 · 순서 고정 · 사람 절 둘 · 한 절 3문장 이하",
        " / ".join(worst[:4]) or f"후보 {len(topics)}개 전부")
 
-    made_none = [x["제목"] for x in topics
-                 if len(P.build(x, metrics.topic_evidence(t, x), cards,
-                                {})) < len(P.SECTIONS)]
+    made_none = [x["제목"] for x, _ev, secs in built.values()
+                 if len(secs) < len(P.SECTIONS)]
     ok(made_none, "채울 수 없는 절은 아예 안 만든다",
        f"{len(made_none)}개 주제에서 절이 빠졌다 — 자리를 비우는 것과 다르다")
+
+    print("\n── 주제와 문서가 맞물리는가 ──")
+    # ★ 이 세 검사는 나중에 붙었다. 붙이기 전까지 34개가 «전부 지킴» 이었는데,
+    #   임계값 넷과 추세 넷 — 여덟 문서가 제목만 다르고 본문이 똑같았다.
+    #   검사가 문서를 **하나만** 열어 봤기 때문이다. 하나를 깊게 보는 검사와
+    #   전부를 얕게 보는 검사는 다른 것을 잡는다.
+    mismatch = []
+    for x, ev, _secs in built.values():
+        c = ev.get("원인")
+        if c and c["구간"] != metrics._topic_span(x):
+            mismatch.append(f"{x['제목']} 주제 {metrics._topic_span(x)} "
+                            f"≠ 분해 {c['구간']}")
+    ok(not mismatch, "원인 절이 주제의 구간을 쪼갠다",
+       " / ".join(mismatch[:3]) or
+       "다른 구간을 쪼개 놓고 «이 구간» 이라고 적지 않는다")
+
+    seen, same = {}, []
+    for x, _ev, secs in built.values():
+        body = tuple(ln for sec in secs if sec["kind"] == "auto"
+                     for ln in sec["문장"])
+        if body and body in seen:
+            same.append(f"{seen[body]} = {x['제목']}")
+        seen[body] = x["제목"]
+    ok(not same, "주제가 다르면 문서도 다르다",
+       " / ".join(same[:3]) or f"자동 문장이 겹치는 짝 0 (후보 {len(built)}개)")
+
+    cap_bad = []
+    for x, ev, secs in built.values():
+        fo = (ev.get("현황") or {}).get("초점")
+        cur = next((c["차트"] for c in secs
+                    if c["키"] == "현황" and c.get("차트")), None)
+        if fo and cur and fo["구간"] not in cur:
+            cap_bad.append(f"{x['제목']} 그림은 {fo['구간']} 을 안 가리킨다")
+    ok(not cap_bad, "퍼널 그림이 이 문서의 구간을 강조한다",
+       " / ".join(cap_bad[:3]) or
+       "문장과 그림이 같은 칸을 가리킨다 — 다르면 그림이 문장을 반박한다")
+
+    grain_bad = []
+    for x, ev, _secs in built.values():
+        tr = ev.get("추세")
+        if not tr:
+            continue
+        want = metrics.METRIC_SPAN.get(tr["지표"], (None, None))[0]
+        if want and want != metrics._grain_of(x):
+            grain_bad.append(f"{x['제목']}({metrics._grain_of(x)}) "
+                             f"← {tr['지표']}({want})")
+    ok(not grain_bad, "실은 추세가 문서와 같은 단위로 잰 것이다",
+       " / ".join(grain_bad[:3]) or
+       "명 기준 문서에 건 기준 추세를 싣지 않는다")
 
     print("\n── 문서 하나를 열어서 ──")
     topic = next(x for x in topics if x["키"] == MAIN_TOPIC)

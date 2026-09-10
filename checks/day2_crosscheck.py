@@ -10,6 +10,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from checks._console import use_utf8  # noqa: E402
+
+use_utf8()      # 출력 때문에 죽지 않게. checks/_console.py 참고
+
 from core import config, context, loader, metrics  # noqa: E402
 
 # 손계산 값의 원본은 core/config.py 하나다.
