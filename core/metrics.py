@@ -852,6 +852,30 @@ def stress(tables, topic):
     return out
 
 
+def data_source(tables):
+    """이 문서가 **무엇을 읽고** 나온 값인가. 조회만 한다.
+
+    ★ 기간 · 표본 · 분모는 적어 두었는데 «어느 표를 읽었는가» 와 «그 표가
+      입구 검사를 통과했는가» 가 문서에 없었다. 되짚어 볼 수 없는 숫자는
+      근거가 아니라 주장이다. 화면(게이트 1)은 이 검사를 이미 돌리고 있었고,
+      문서만 그 결과를 안 싣고 있었다.
+    """
+    from core import validate          # 순환 참조를 피해 함수 안에서 부른다
+    res = validate.run_checks(tables)
+    warn = [r["name"].split(" · ")[0] for r in validate.warnings(res)]
+    종류 = []
+    for w in warn:
+        if w not in 종류:
+            종류.append(w)
+    return {
+        "표": {n: int(len(d)) for n, d in tables.items()},
+        "고유지원": int(tables["applications"]["application_id"].nunique())
+        if "applications" in tables else None,
+        "검사": validate.counts(res),
+        "경고종류": 종류,
+    }
+
+
 def topic_evidence(tables, topic):
     """고른 주제 하나가 쓸 근거를 한 번에 모아 돌려준다.
 
@@ -870,6 +894,7 @@ def topic_evidence(tables, topic):
                    "지원": int(len(_ap)),
                    "공고": int(_ap["posting_id"].nunique())
                    if "posting_id" in _ap.columns else None},
+          "출처": data_source(tables),
           "현황": None, "원인": None, "규모": None, "추세": None, "없는 이유": {}}
 
     # ── 현황 — 그 주제가 속한 퍼널 전체 ────────────────────────────────

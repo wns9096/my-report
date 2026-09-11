@@ -59,8 +59,11 @@ HUMAN_KEYS = ("위험", "요청")
 # 재료 — 카드 · 사람이 쓴 절
 # ══════════════════════════════════════════════════════════════════════════
 _FIELD = re.compile(r"^-\s*([^:]{1,10}):\s*(.*)$")
-_FIELDS = ("제목", "분류", "주제키", "확신도", "근거", "크기", "비용", "효과",
-           "되돌림", "출처")
+# ★ 담당 · 일정 · 공수를 뒤늦게 더했다. 값도 효과도 되돌림도 다 적어 두고
+#   «그래서 누가 · 언제 하느냐» 만 없었는데, 읽는 사람은 그 셋이 없으면
+#   실행할 수 있는 제안으로 안 읽는다. 근거가 아니라 실행의 자리다.
+_FIELDS = ("제목", "분류", "주제키", "확신도", "근거", "크기",
+           "담당", "일정", "공수", "비용", "효과", "되돌림", "출처")
 
 
 def load_cards(path=None) -> list[dict]:
@@ -103,7 +106,11 @@ def card_problems(cards) -> list[str]:
         bad.append("「하지 말 것」이 하나도 없습니다. 지금 하는 게 다 옳을 리 없습니다.")
     for c in cards:
         t = c.get("제목", c["카드"])
-        for fld in ("비용", "효과", "되돌림", "크기"):
+        for fld in ("담당", "일정"):
+            if not str(c.get(fld, "")).strip():
+                bad.append(f"「{t}」 {fld} 가 비어 있습니다 — 누가 · 언제 가 "
+                           f"없으면 실행할 수 있는 제안이 아닙니다.")
+        for fld in ("비용", "효과", "되돌림", "크기", "공수"):
             v = c.get(fld, "")
             if is_todo(v) and len(todo_parts(v)) < 3:
                 bad.append(f"「{t}」 {fld} 가 낱말 하나로 남았습니다 — "
@@ -227,6 +234,19 @@ def _s_현황(topic, ev, cards, human):
     else:
         문장.append(f"구간 {n}개 가운데 가장 낮은 것은 {h['병목 구간']} "
                     f"{_pp(h['병목 전환율'])}%입니다.")
+    # ★ «전환율 18.1%» 만으로는 얼마짜리인지 안 보인다. 이 구간에서 실제로
+    #   몇이 빠지고 그것이 퍼널 전체 이탈의 몇 할인지를 같은 자리에 적는다.
+    #   «여기부터 보라» 는 말을 숫자가 대신하게 한다.
+    if 갈래 not in ("임계값", "추세"):
+        분모 = fo["분모"] if fo else h["병목 분모"]
+        도달 = fo["도달"] if fo else h["병목 도달"]
+        전체 = int(f.iloc[0]["인원"]) - int(f.iloc[-1]["인원"])
+        빠짐 = 분모 - 도달
+        if 전체 > 0:
+            문장.append(
+                f"여기서 {빠짐:,}{unit}{_josa(unit, ('이', '가'))} 빠집니다 — "
+                f"{len(f)}단계를 지나며 빠지는 {전체:,}{unit}의 "
+                f"{빠짐 / 전체 * 100:.1f}%입니다.")
     out = {"문장": 문장[:3], "차트": 차트, "표": h["구간표"]}
     if 갈래 in ("임계값", "추세"):
         out["질문"] = config.word("질문", "현황:지표")
@@ -247,7 +267,13 @@ def _s_원인(topic, ev, cards, human):
         f"{_gap_pp(hi['전환율'], lo['전환율'])}%p 벌어지고, 낮은 쪽이 이 구간에 "
         f"들어온 것의 {_pp(lo['비중'], 1)}%를 차지합니다.",
     ]
-    꼬리 = []
+    # ★ B(있는데 못 찾았다). «견준 값이지 바꿔 보고 잰 값이 아니다» 는 규모 절
+    #   가정 표 첫 줄에만 있었다. 이 절이 «누구에게서 벌어집니까» 에 답하는
+    #   자리이므로, 그 답이 **어떤 종류의 값인지**도 여기서 말해야 한다.
+    #   ★ 새 문장으로 붙였더니 네 문장이 되는 문서가 넷 나왔다 — 한 절 세 문장
+    #     규칙에 걸렸다. 단서는 단서끼리 한 줄에 모은다. 규칙을 늘리는 것보다
+    #     같은 종류를 한 자리에 두는 것이 읽기에도 낫다.
+    꼬리 = ["칸을 나눠 견준 값이고 한쪽 배분을 바꿔 보고 잰 값이 아닙니다"]
     if hidden:
         꼬리.append(f"표본이 모자란 {hidden}칸은 값을 내지 않았습니다")
     if c.get("미분류"):
@@ -323,7 +349,9 @@ def _s_제안(topic, ev, cards, human):
         who = config.word("분류", c["분류"])
         rows.append({"항목": "구분", "내용": who})
         rows.append({"항목": "무엇을", "내용": c.get("제목", "")})
-        for fld in ("비용", "효과", "되돌림"):
+        # 읽는 순서가 곧 결정 순서다 — 무엇을 · 누가 · 언제 · 얼마나 · 얼마가
+        # 드나 · 얼마를 버나 · 틀리면 어떻게 되돌리나.
+        for fld in ("담당", "일정", "공수", "비용", "효과", "되돌림"):
             v = c.get(fld, TODO)
             if is_todo(v):
                 p = todo_parts(v)
@@ -608,7 +636,43 @@ def _sample(sample) -> str:
     return (" · 표본 " + " · ".join(part)) if part else ""
 
 
-def to_html(secs, topic=None, sample=None) -> str:
+_SRC_NAMES = {"applicants": "지원자", "postings": "공고",
+              "applications": "지원", "application_events": "단계 이벤트"}
+
+
+def _source(src) -> str:
+    """어느 표를 읽었고 입구 검사가 어떻게 나왔는가. 없으면 아무것도 안 쓴다.
+
+    ★ 화면(게이트 1)은 이 검사를 늘 돌리고 있었는데 문서만 결과를 안 실었다.
+      되짚어 볼 수 없는 숫자는 근거가 아니라 주장이다. 경고를 숨기지 않는다 —
+      경고가 0인 데이터가 아니라, 경고를 세어 두고 넘긴 데이터다.
+    """
+    if not src:
+        return ""
+    t = src.get("표") or {}
+    c = src.get("검사") or {}
+    부 = []
+    for key, ko in _SRC_NAMES.items():
+        if key not in t:
+            continue
+        n, uniq = t[key], src.get("고유지원")
+        부.append(f"{ko} {n:,}행(고유 {uniq:,})"
+                  if key == "applications" and uniq and uniq != n
+                  else f"{ko} {n:,}행")
+    검 = ""
+    if c:
+        검 = (f" · 입구 검사 {sum(c.values())}건 — 차단 {c.get('block', 0)} · "
+              f"경고 {c.get('warn', 0)} · 통과 {c.get('ok', 0)}")
+        if src.get("경고종류"):
+            검 += f" (경고 종류: {' · '.join(src['경고종류'])})"
+    if not 부 and not 검:
+        return ""
+    return ('<p class="meta">출처 표 ' + str(len(부)) + '개 — '
+            + html.escape(" · ".join(부) + 검,
+                                                  quote=False) + "</p>\n")
+
+
+def to_html(secs, topic=None, sample=None, source=None) -> str:
     """단일 파일 HTML. 빈 절은 그리지 않는다. 외부 CSS·이미지·CDN 을 쓰지 않는다."""
     body = []
     summary = one_pager(secs)
@@ -627,8 +691,17 @@ def to_html(secs, topic=None, sample=None) -> str:
             part.append(f'<figure>{s["차트"]}</figure>')
         part.append(_table_html(s.get("표")))
         if s.get("사람글"):
-            cls = "ask" if s.get("강조") else "said"
-            part.append(f'<p class="{cls}">{_mark(s["사람글"])}</p>')
+            # ★ 사람이 쓴 글은 문단으로 나뉘어 있는데 한 <p> 에 통째로 넣고
+            #   있었다. 위험 절은 .said 의 pre-wrap 이 줄바꿈을 살려 줘서 티가
+            #   안 났고, 요청 절은 .ask 에 그것이 없어 **세 문단이 한 덩어리**로
+            #   붙어 나왔다. 한 문단일 때는 아무 문제가 없다가 문단이 늘자 났다.
+            #   그리고 강조는 **마지막 문단 하나**에만 건다 — 다 굵게 하면
+            #   아무것도 강조가 아니고, 결정문이 그 안에 묻힌다.
+            paras = [x.strip() for x in
+                     re.split(r"\n\s*\n", str(s["사람글"]).strip()) if x.strip()]
+            for i, para in enumerate(paras):
+                cls = ("ask" if s.get("강조") and i == len(paras) - 1 else "said")
+                part.append(f'<p class="{cls}">{_mark(para)}</p>')
         part.append("</section>")
         body.append("".join(part))
 
@@ -643,4 +716,5 @@ def to_html(secs, topic=None, sample=None) -> str:
         f'{config.PERIOD[0]} ~ {config.PERIOD[1]} · 기준일 {config.AS_OF} · '
         f'세는 단위 {html.escape(str((topic or {}).get("세는 단위", "")), quote=False)}'
         f'{_sample(sample)}'
-        f"</p>\n" + "\n".join(body) + "\n</div>\n</body>\n</html>\n")
+        f"</p>\n" + _source(source) + "\n".join(body)
+        + "\n</div>\n</body>\n</html>\n")

@@ -52,6 +52,31 @@ ITEMS = [
     (12, "B", "요청 절이 단정형이다", r"환산값입니다—위가정5개"),
 ]
 
+# 강사 벤치마크 앱(자동 채점) 이 짚은 것. 페르소나와 겹치는 자리도 있고
+# 아닌 자리도 있다 — 겹치지 않는 자리가 사람이 안 보는 자리였다.
+#
+# ★ 여기 없는 것이 넷 있다. 채점기가 짚었지만 **안 고친 것**이다.
+#   안 고친 이유는 제안서_답변지.md 에 있고, 그 이유가 이 문서의 답변이다.
+#   점수를 올리려고 고쳐서는 안 되는 것(확신도 올리기 · 확인 계획 지우기 ·
+#   전제 줄 줄이기)은 여기에 절대 넣지 않는다.
+BENCH = [
+    (13, "A", "누가 하는지 없다", r"담당나\.어느공고에낼지고르는사람도"),
+    (14, "A", "언제 하는지 없다", r"다음분기첫지원전1주안에후보공고목록"),
+    (15, "A", "얼마나 드는 일인지 없다", r"한분기164건이고그66개에공고당2\.5건"),
+    (16, "A", "어느 표를 읽었는지 없다", r"출처표4개—지원자520행"),
+    (17, "A", "입구 검사 결과가 문서에 없다", r"입구검사13건—차단0·경고4·통과9"),
+    (18, "A", "경쟁도를 «모른다»고만 적었다", r"공고240개전부에값이있고\(결측0건\)"),
+    (19, "A", "되돌리는 데 얼마나 걸리는지 없다", r"되돌리는데걸리는시간은다음지원한건까지다"),
+    (20, "A", "결정 시한이 없다", r"1월첫주안에필요합니다"),
+    (21, "A", "문제 정의에 크기가 없다", r"4,065건이빠집니다"),
+    (22, "B", "상관인지 개입 결과인지 안 보인다",
+     r"칸을나눠견준값이고한쪽배분을바꿔보고잰값이아닙니다"),
+    (23, "A", "조기 중단 규칙이 없다", r"보는시점은석달뒤한번이다"),
+    (24, "A", "무엇을 바꾸는 결정인지 범위가 없다", r"채용시스템을바꾸는것이아니라"),
+    (25, "A", "경고를 문서가 안 물고 왔다", r"학력6\.9%·공고산업12\.5%·지원산업13\.2%"),
+    (26, "A", "모른다고만 하고 잴 수 있는 것을 안 쟀다", r"r=-0\.07.{0,60}r=0\.02"),
+]
+
 results = []
 
 
@@ -68,18 +93,65 @@ def visible(h: str) -> str:
     return re.sub(r"\s+", " ", _html.unescape(h))
 
 
+def hand(t, flat):
+    """사람이 **손으로** 적은 숫자를 다시 세서 문서와 견준다.
+
+    ★ 이 앱에서 틀린 숫자는 늘 손으로 쓴 자리에서 나왔다. 조회에서 온 값은
+      한 번도 안 틀렸다. 담당·일정·공수와 위험 절은 사람이 쓰는 자리라
+      여기 적힌 숫자는 아무도 다시 세 주지 않는다 — 그래서 여기서 센다.
+    """
+    po, ap = t["postings"], t["applications"].drop_duplicates("application_id")
+    m = ap.merge(po[["posting_id", "competition"]], on="posting_id", how="left")
+    low = po.loc[po["competition"] < 0.35, "posting_id"]
+    inlow, hi = m.loc[m["posting_id"].isin(low)], m.loc[m["competition"] >= 0.65]
+    mv = len(hi) // 2
+    cnt = ap.groupby("posting_id").size().rename("건수")
+    d = po.set_index("posting_id").join(cnt).fillna({"건수": 0})
+    fit = m[["fit_score", "competition"]].corr().iloc[0, 1]
+    f = metrics.funnel(t, "application")
+    처음, 끝 = int(f.iloc[0]["인원"]), int(f.iloc[-1]["인원"])
+    빠짐 = 처음 - int(f.iloc[1]["인원"])
+    쓴다 = [
+        (f"{len(low)}개", "경쟁도 0.35 미만 공고 수"),
+        (f"{len(inlow) / len(low):.1f}건", "그 공고당 지금 지원 건수"),
+        (f"{(len(inlow) + mv) / len(low):.1f}건", "한꺼번에 옮겼을 때 공고당"),
+        (f"{round(mv / 4):,}건", "한 분기에 옮기는 양"),
+        (f"{mv / 4 / len(low):.1f}건", "그 공고당 분기 증가분"),
+        (f"{round(len(ap) / 12):,}건", "한 달치 지원 — 되돌려도 남는 양"),
+        (f"{빠짐:,}건", "이 구간에서 빠지는 양"),
+        (f"{빠짐 / (처음 - 끝) * 100:.1f}%", "퍼널 전체 이탈 대비"),
+        (f"{po['competition'].min():.3f}", "경쟁도 최솟값"),
+        (f"{po['competition'].max():.3f}", "경쟁도 최댓값"),
+        (f"{po['competition'].mean():.3f}", "경쟁도 평균"),
+        (f"{d['competition'].corr(d['건수']):.2f}", "경쟁도와 공고당 건수 상관"),
+        (f"{fit:.2f}", "경쟁도와 적합도 상관"),
+    ]
+    for 값, 뜻 in 쓴다:
+        ok(값.replace(",", "").replace(" ", "")
+           in flat.replace(",", "") or 값 in flat,
+           f"손으로 쓴 «{값}» 이 조회값과 같다", 뜻)
+
+
 def main():
     t = {n: loader._cast_dates(loader._read(config.DATA / f"{n}.csv"))
          for n in config.TABLES}
     topic = {x["키"]: x for x in metrics.proposal_topics(t)}[TOPIC]
     ev = metrics.topic_evidence(t, topic)
     secs = P.build(topic, ev, P.load_cards(), P.human_for(topic))
-    text = visible(P.to_html(secs, topic, ev.get("표본")))
+    text = visible(P.to_html(secs, topic, ev.get("표본"), ev.get("출처")))
     flat = re.sub(r"\s+", "", text)
 
-    print(f"\n답변지에 «고쳤다»고 적은 것이 문서에 있는가 — {len(ITEMS)}건\n")
+    print(f"\n답변지에 «고쳤다»고 적은 것이 문서에 있는가 — "
+          f"{len(ITEMS) + len(BENCH)}건\n")
+    print("── 페르소나 둘이 짚은 것 ──")
     for no, kind, what, pat in ITEMS:
         ok(re.search(pat, flat), f"{no:>4} [{kind}] {what}")
+    print("\n── 강사 벤치마크 앱이 짚은 것 ──")
+    for no, kind, what, pat in BENCH:
+        ok(re.search(pat, flat), f"{no:>4} [{kind}] {what}")
+
+    print("\n── 손으로 쓴 숫자를 다시 센다 ──")
+    hand(t, flat)
 
     print("\n── 답변지 자체 ──")
     if not ANSWERS.exists():

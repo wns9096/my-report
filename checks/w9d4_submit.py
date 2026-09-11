@@ -96,7 +96,7 @@ def main():
     ev = metrics.topic_evidence(t, topic)
     human = P.human_for(topic)
     secs = P.build(topic, ev, cards, human)
-    doc = P.to_html(secs, topic, ev.get("표본"))
+    doc = P.to_html(secs, topic, ev.get("표본"), ev.get("출처"))
     text = visible(doc)
 
     print(f"\n제출 전 확인 — 「{topic['제목']}」\n")
