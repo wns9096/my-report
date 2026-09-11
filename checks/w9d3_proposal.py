@@ -220,7 +220,7 @@ def main():
     ev = metrics.topic_evidence(t, topic)
     human = P.human_for(topic)
     secs = P.build(topic, ev, cards, human)
-    doc = P.to_html(secs, topic)
+    doc = P.to_html(secs, topic, ev.get("표본"))
     text = visible_text(doc)
 
     ok(len(secs) <= 7, "절 개수가 일곱 이하다", f"{len(secs)}개")

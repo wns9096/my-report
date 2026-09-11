@@ -743,6 +743,115 @@ def _cause_axis(tables, grain, span=None):
     return best
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# 9주차 Day4 — 가정을 흔들어 본다
+# ══════════════════════════════════════════════════════════════════════════
+# 읽는 사람이 격차를 보고 처음 묻는 것은 «그 값이 맞는가» 가 아니라
+# «다른 것으로 설명되는 것 아닌가» 다. 가정만 적어 두면 그 질문에 답이 없다.
+# 그래서 가정마다 **흔들어 본 결과**를 같은 줄에 적는다.
+#
+# ★ 새 계산식을 만들지 않는다. 표를 거른 뒤 **같은 함수**를 다시 돌린다.
+#   여기서 따로 계산하면 본문과 견딤이 서로 다른 자를 쓰게 된다.
+
+
+def _slice(tables, app_ids):
+    """지원 건 일부만 남긴 표 묶음. 계산은 원래 함수가 그대로 한다."""
+    keep = set(app_ids)
+    out = dict(tables)
+    for name in ("applications", "application_events"):
+        df = tables[name]
+        out[name] = df.loc[df["application_id"].isin(keep)]
+    return out
+
+
+def _axis_rates(tables, axis, span):
+    """이 축의 칸별 전환율. 못 믿을 조건은 그대로 건다."""
+    from core import verdict as _v
+    start, end = _span_pair(span)
+    g = _v.decomp_with_trust(tables, axis, start=start, end=end)
+    ok = g.loc[g["사유"].isna() & g["전환율"].notna()]
+    return {str(r["칸"]): float(r["전환율"]) for _, r in ok.iterrows()}
+
+
+def _max_lag(tables, span):
+    """이 구간의 결과가 오기까지 실제로 걸린 가장 긴 날 수."""
+    start, end = _span_pair(span)
+    ev = tables["application_events"]
+    a = ev.loc[ev["stage"] == (start or config.FUNNEL_STEPS[0]),
+               ["application_id", "event_date"]]
+    b = ev.loc[ev["stage"] == (end or config.FUNNEL_STEPS[1]),
+               ["application_id", "event_date"]]
+    j = a.merge(b, on="application_id", suffixes=("_s", "_e"))
+    if j.empty:
+        return None
+    return int((j["event_date_e"] - j["event_date_s"]).dt.days.max())
+
+
+def stress(tables, topic):
+    """가정을 흔들어 본다. 못 흔드는 것은 «안 해 봤다»고 적는다.
+
+    돌려주는 것은 {키: 한 줄} — 키가 없으면 그 줄은 «안 해 봤습니다» 가 된다.
+    """
+    out = {}
+    span = _topic_span(topic)
+    axis, lo, hi = topic.get("근거축"), topic.get("낮은"), topic.get("높은")
+    ap = tables["applications"].drop_duplicates("application_id")
+
+    # ① 달마다 나눠도 격차가 남는가 — 시점이 대신 설명하는 것 아닌가
+    if axis and lo and hi:
+        months, held = 0, 0
+        gaps = []
+        m = ap.copy()
+        m["월"] = m["applied_date"].dt.to_period("M").astype(str)
+        for _mo, g in m.groupby("월"):
+            r = _axis_rates(_slice(tables, g["application_id"]), axis, span)
+            if lo not in r or hi not in r:
+                continue        # 그 달에 못 믿을 조건에 걸린 칸이 있다
+            months += 1
+            d = round(_pp(r[hi]) - _pp(r[lo]), 1)
+            gaps.append(d)
+            held += d > 0
+        if months:
+            out["시점"] = (f"달마다 따로 보면 표본 조건을 넘긴 {months}개월 중 "
+                           f"{held}개월에서 같은 방향이었습니다 "
+                           f"(격차 {min(gaps):.1f} ~ {max(gaps):.1f}%p).")
+    else:
+        out["시점"] = ("축이 아니라 구간이라 달마다 쪼개면 칸이 "
+                       "못 믿을 조건에 걸립니다. 안 해 봤습니다.")
+
+    # ② 결과가 아직 안 온 건을 빼도 격차가 남는가 — 우측 절단
+    lag = _max_lag(tables, span)
+    if lag is not None and axis and lo and hi:
+        cut = pd.Timestamp(config.AS_OF) - pd.Timedelta(days=lag)
+        ripe = ap.loc[ap["applied_date"] <= cut]
+        n_raw, n_cut = len(ap), len(ap) - len(ripe)
+        r = _axis_rates(_slice(tables, ripe["application_id"]), axis, span)
+        if lo in r and hi in r:
+            d = round(_pp(r[hi]) - _pp(r[lo]), 1)
+            out["성숙"] = (
+                f"이 구간의 결과는 길어야 {lag}일 안에 옵니다. 아직 올 수 있는 "
+                f"{n_cut:,}건({n_cut / n_raw:.1%})을 빼면 격차가 "
+                f"{_pp(topic.get('격차', 0))}%p 에서 {d:.1f}%p 가 됩니다.")
+
+    # ③ 분모가 서로 독립인가 — 같은 공고에 여러 건이 들어갔다
+    if "posting_id" in ap.columns:
+        n_post, n_co = ap["posting_id"].nunique(), ap["company"].nunique()
+        out["독립"] = (f"고유 공고 {n_post:,}개 · 회사 {n_co:,}개에 "
+                       f"{len(ap):,}건이 들어갔습니다 (공고 1개당 "
+                       f"{len(ap) / n_post:.1f}건). 건끼리 독립이 아닙니다.")
+
+    # ④ 이 제안이 앞 단계만 늘리는 것은 아닌가 — 마지막 단계로도 봐 본다
+    last = config.FUNNEL_STEPS[-1]
+    if axis and lo and hi and _span_pair(span)[1] != last:
+        r = _axis_rates(tables, axis, f"{config.FUNNEL_STEPS[0]} → {last}")
+        if lo in r and hi in r:
+            out["끝단계"] = (
+                f"같은 칸을 {last} 기준으로 보면 {lo} {_pp(r[lo])}% · "
+                f"{hi} {_pp(r[hi])}% 로 순서가 "
+                f"{'같습니다' if r[hi] > r[lo] else '뒤집힙니다'}.")
+    return out
+
+
 def topic_evidence(tables, topic):
     """고른 주제 하나가 쓸 근거를 한 번에 모아 돌려준다.
 
@@ -753,7 +862,14 @@ def topic_evidence(tables, topic):
     grain = _grain_of(topic)
     unit = "명" if grain == "person" else "건"
     years = _period_years()
+    # ★ 표본이 몇인지가 문서에 없으면, 읽는 사람은 4,961이 한 사람 것인지
+    #   여러 사람 것인지 모른 채로 읽는다. 머리글 한 줄이면 되는 것이었다.
+    _ap = tables["applications"].drop_duplicates("application_id")
     ev = {"주제": topic, "세는 단위": GRAIN_UNIT[grain],
+          "표본": {"지원자": int(_ap["applicant_id"].nunique()),
+                   "지원": int(len(_ap)),
+                   "공고": int(_ap["posting_id"].nunique())
+                   if "posting_id" in _ap.columns else None},
           "현황": None, "원인": None, "규모": None, "추세": None, "없는 이유": {}}
 
     # ── 현황 — 그 주제가 속한 퍼널 전체 ────────────────────────────────
@@ -867,6 +983,18 @@ def topic_evidence(tables, topic):
                 "(단가 미확보).",
             ],
         }
+        # 가정과 **같은 순서·같은 개수**로 짝을 맞춘다. 짝이 없는 줄은
+        # «안 해 봤습니다» 가 된다 — 빈칸으로 두면 안 한 것인지 못 한 것인지
+        # 읽는 사람이 알 수 없다.
+        st = stress(tables, topic)
+        ev["규모"]["흔든것"] = st
+        ev["규모"]["흔들기"] = [
+            st.get("시점", "안 해 봤습니다."),
+            st.get("성숙", "안 해 봤습니다."),
+            st.get("독립", "안 해 봤습니다."),
+            st.get("끝단계", "안 해 봤습니다."),
+            "안 해 봤습니다. 건당 금액이 없으면 흔들어 볼 것도 없습니다.",
+        ]
 
     # ── 추세 — 관련 지표의 최근 12개월 ─────────────────────────────────
     name = _topic_metric(topic)

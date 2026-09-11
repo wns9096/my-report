@@ -287,12 +287,20 @@ def _s_규모(topic, ev, cards, human):
             fmt = (lambda v: f"{_pp(v)}%") if tr["형식"] == "%" else \
                 (lambda v: f"{float(v):.3f}")
             문장.append(
-                f"{tr['지표']}{_josa(tr['지표'])} 값을 믿을 수 있는 "
+                f"{tr['지표']}{_josa(tr['지표'])} 관측이 덜 찬 뒤쪽 "
+                f"{max(0, len(tr['값']) - len(s)) or ''}개월을 빼고 "
                 f"{s.index[0]} ~ {s.index[-1]} 구간에서 {fmt(s.iloc[0])}에서 "
                 f"{fmt(s.iloc[-1])}로 움직였습니다.")
             차트 = svg
-    return {"문장": 문장, "차트": 차트,
-            "표": pd.DataFrame({"환산에 쓴 가정": m["가정"]})}
+    # ★ 가정만 적어 두면 «다른 것으로 설명되는 것 아닌가» 에 답이 없다.
+    #   가정과 **같은 줄에** 흔들어 본 결과를 적는다. 못 흔든 줄은
+    #   «안 해 봤습니다» 라고 적는다 — 빈칸이면 안 한 것인지 못 한 것인지
+    #   읽는 사람이 모른다.
+    흔 = m.get("흔들기")
+    표 = (pd.DataFrame({"환산에 쓴 가정": m["가정"], "흔들어 봤더니": 흔})
+          if 흔 and len(흔) == len(m["가정"])
+          else pd.DataFrame({"환산에 쓴 가정": m["가정"]}))
+    return {"문장": 문장, "차트": 차트, "표": 표}
 
 
 def _s_제안(topic, ev, cards, human):
@@ -356,11 +364,23 @@ def _s_요청(topic, ev, cards, human):
     if m:
         n, unit = m["환산값"]["연간건수"], m["환산값"]["단위"]
         문장 = [
-            f"이 주제의 규모는 한 해 {n:,}{unit}입니다.",
+            # ★ B(있는데 못 찾았다) 처리. «개입 효과를 실측한 값이 아니다» 는
+            #   규모 절의 가정 표에 있었는데, 결정하는 사람은 요청 절만 보고
+            #   판정한다. 거기서는 «한 해 136건입니다» 라는 단정문이었다.
+            #   단서를 붙인 뒤 단서 없이 다시 쓰면 단서를 안 붙인 것과 같다.
+            #   내용을 새로 쓰지 않고 말만 앞으로 당긴다.
+            f"이 주제의 규모는 한 해 {n:,}{unit}입니다 "
+            f"(환산값입니다 — 위 가정 {len(m.get('가정') or [])}개를 두고 "
+            f"냈습니다).",
             f"결정을 다음 분기로 미루면 그동안 "
             f"{round(n / 4):,}{unit}{_josa(unit, ('이', '가'))} 더 쌓입니다 "
             f"(한 해분을 네 분기로 고르게 나눈 값입니다).",
         ]
+        # 결정하는 사람이 가장 먼저 묻는 것 — «앞 단계만 늘리는 것 아닌가».
+        # 그 답을 결정 바로 앞에 둔다. 뒤에 두면 결정한 다음에 읽는다.
+        끝 = (m.get("흔든것") or {}).get("끝단계")
+        if 끝:
+            문장.append(끝)
     tbl = pd.DataFrame({"선택지": list(config.PROPOSAL_WORDS["결정"]),
                         "따라오는 것": list(config.PROPOSAL_WORDS["결정"].values())})
     return {"문장": 문장, "차트": None, "표": tbl, "강조": True,
@@ -575,7 +595,20 @@ def _cell(v, name="") -> str:
     return '<span class="todo">—</span>' if s == "—" else _mark(s)
 
 
-def to_html(secs, topic=None) -> str:
+def _sample(sample) -> str:
+    """표본 규모 한 구절. 없으면 아무것도 안 쓴다.
+
+    ★ 4,961 이 한 사람 것인지 여러 사람 것인지가 문서에 없었다. 읽는 사람이
+      제일 먼저 묻는 것이었는데 머리글 한 줄이면 되는 것이었다.
+    """
+    if not sample:
+        return ""
+    part = [f"{v:,}{u}" for k, u in (("지원자", "명"), ("공고", "개"))
+            for v in [sample.get(k)] if v]
+    return (" · 표본 " + " · ".join(part)) if part else ""
+
+
+def to_html(secs, topic=None, sample=None) -> str:
     """단일 파일 HTML. 빈 절은 그리지 않는다. 외부 CSS·이미지·CDN 을 쓰지 않는다."""
     body = []
     summary = one_pager(secs)
@@ -609,4 +642,5 @@ def to_html(secs, topic=None) -> str:
         f'<p class="meta">{html.escape(config.DATASET, quote=False)} · '
         f'{config.PERIOD[0]} ~ {config.PERIOD[1]} · 기준일 {config.AS_OF} · '
         f'세는 단위 {html.escape(str((topic or {}).get("세는 단위", "")), quote=False)}'
+        f'{_sample(sample)}'
         f"</p>\n" + "\n".join(body) + "\n</div>\n</body>\n</html>\n")

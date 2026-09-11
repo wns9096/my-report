@@ -201,7 +201,7 @@ if not P.has_decision_verb(last):
     st.error("✕ 문서 마지막 줄에 결정을 요구하는 동사가 없습니다. "
              "읽은 사람이 «잘 봤다»로 끝냅니다.")
 
-html_ = P.to_html(secs, topic)
+html_ = P.to_html(secs, topic, ev.get("표본"))
 st.download_button("제안서.html 내려받기", html_,
                    file_name=f"제안서_{topic['키'].replace(':', '_')}.html",
                    mime="text/html", type="primary")

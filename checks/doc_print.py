@@ -69,7 +69,7 @@ def main():
             ev = metrics.topic_evidence(t, x)
             secs = P.build(x, ev, cards, P.human_for(x))
             f = tmp / (x["키"].replace(":", "_").replace(" ", "") + ".html")
-            f.write_text(P.to_html(secs, x), encoding="utf-8")
+            f.write_text(P.to_html(secs, x, ev.get("표본")), encoding="utf-8")
             page.goto(f.as_uri())
             page.wait_for_timeout(250)
             over = page.evaluate(FIND_OVER, A4_PX)

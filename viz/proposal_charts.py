@@ -279,7 +279,9 @@ def trend_svg(추세):
     cap = f"{추세['지표']} 월별"
     dropped = len(추세["값"]) - len(s)
     if dropped:
-        cap += (f" · 관측이 덜 찬 최근 {dropped}개월은 그리지 않았습니다 "
+        # 이유(«관측이 덜 찼다»)는 본문 문장으로 옮겼다 — 캡션에만 두었더니
+        # 읽는 두 사람 다 «왜 뺐는지 문서에 없다»고 했다. 여기는 범위만 남긴다.
+        cap += (f" · 뒤쪽 {dropped}개월은 그리지 않았습니다 "
                 f"(유효 구간 ~{config.VALID_UNTIL})")
     if 추세.get("위험") is not None:
         cap += f" · 위험선 {fmt(val(추세['위험']))}"
