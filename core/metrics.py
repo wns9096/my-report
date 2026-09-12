@@ -787,6 +787,11 @@ def _max_lag(tables, span):
     return int((j["event_date_e"] - j["event_date_s"]).dt.days.max())
 
 
+# 가드레일 이름과 실제 컬럼을 잇는다. 이름은 config.GUARDRAILS 에서 오고
+# 여기서는 «그 이름이 어느 칸인가» 만 적는다.
+_FIT_COL = {"직무 적합도": "fit_score"}
+
+
 def stress(tables, topic):
     """가정을 흔들어 본다. 못 흔드는 것은 «안 해 봤다»고 적는다.
 
@@ -839,6 +844,36 @@ def stress(tables, topic):
         out["독립"] = (f"고유 공고 {n_post:,}개 · 회사 {n_co:,}개에 "
                        f"{len(ap):,}건이 들어갔습니다 (공고 1개당 "
                        f"{len(ap) / n_post:.1f}건). 건끼리 독립이 아닙니다.")
+
+    # ⑤ 다른 것이 대신 설명하는 것 아닌가 — 가드레일 지표를 묶어 놓고 본다
+    #
+    # ★ 이 줄은 **위험 절에 손으로 적혀 있던 것**이다. 손으로 적은 값은 다시
+    #   안 세어지고, 기준값(0.5)이 어디서 왔는지도 문서에 없었다.
+    #   중앙값으로 위·아래 둘로 갈라 **양쪽에서** 격차가 남는지 본다 —
+    #   기준값을 고를 필요가 없고, 한쪽에서만 남으면 그것도 답이다.
+    #   묶는 지표는 config.GUARDRAILS 에서 온다. 여기서 새로 고르지 않는다.
+    묶을것 = next((c for c in config.GUARDRAILS if c in _FIT_COL), None)
+    col = _FIT_COL.get(묶을것)
+    if axis and lo and hi and col and col in ap.columns:
+        mid = float(ap[col].median())
+        남음 = []
+        for 이름, sel in (("아래", ap[col] < mid), ("위", ap[col] >= mid)):
+            r = _axis_rates(_slice(tables, ap.loc[sel, "application_id"]), axis, span)
+            if lo in r and hi in r:
+                남음.append((이름, round(_pp(r[hi]) - _pp(r[lo]), 1)))
+        if len(남음) == 2:
+            같은방향 = all(d > 0 for _n, d in 남음)
+            out["통제"] = (
+                f"{묶을것}{'이' if (ord(묶을것[-1]) - 0xAC00) % 28 else '가'} "
+                f"비슷한 것끼리 묶어 "
+                f"(중앙값 {mid:.3f} 위·아래) 따로 봐도 격차가 "
+                + " · ".join(f"{n}쪽 {d:.1f}%p" for n, d in 남음)
+                + (" 로 남습니다. 이것이 대신 설명하는 것은 아닙니다."
+                   if 같은방향 else
+                   " 입니다. 한쪽에서 뒤집혀 이것이 대신 설명할 수 있습니다."))
+        elif 남음:
+            out["통제"] = (f"{묶을것}으로 갈라 보면 한쪽이 못 믿을 조건에 "
+                           f"걸립니다. 반쪽만으로는 판단하지 않습니다.")
 
     # ④ 이 제안이 앞 단계만 늘리는 것은 아닌가 — 마지막 단계로도 봐 본다
     last = config.FUNNEL_STEPS[-1]
@@ -1006,6 +1041,10 @@ def topic_evidence(tables, topic):
                  "견준 대상을 따로 두지 않았습니다."),
                 "금액으로 환산하지 않았습니다. 건당 금액을 적어 둔 항목이 없습니다 "
                 "(단가 미확보).",
+                # ★ 「다른 것이 대신 설명하는 것 아닌가」 는 읽는 사람이 반드시
+                #   묻는다. 가정으로 적어 두고 **흔들어 본 결과를 같은 줄에** 둔다.
+                "이 격차가 경쟁이 아니라 다른 것 때문일 수 있습니다. "
+                "이 데이터로 갈라낼 수 있는 것만 갈라 봤습니다.",
             ],
         }
         # 가정과 **같은 순서·같은 개수**로 짝을 맞춘다. 짝이 없는 줄은
@@ -1018,6 +1057,7 @@ def topic_evidence(tables, topic):
             st.get("성숙", "안 해 봤습니다."),
             st.get("독립", "안 해 봤습니다."),
             st.get("끝단계", "안 해 봤습니다."),
+            st.get("통제", "안 해 봤습니다."),
             "안 해 봤습니다. 건당 금액이 없으면 흔들어 볼 것도 없습니다.",
         ]
 
