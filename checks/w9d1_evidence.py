@@ -146,8 +146,8 @@ def b3_by_axis(t):
         g = metrics.funnel_by(t, axis)
         tbl = g["칸"].map(lambda _: metrics.AXES[axis][0]).iloc[0]
         grain = "지원 1건" if tbl == "applications" else "지원자 1명"
-        # 격차는 «화면에 찍히는 값»에서 뺀다. 원값끼리 빼면 23.4% 와 13.1% 를
-        # 보여 주면서 격차를 10.4%p 라고 적게 되고, 읽는 사람이 암산해서
+        # 격차는 «화면에 찍히는 값»에서 뺀다. 23.4% 와 13.1% 를 보여 주면서
+        # 원값으로 뺀 10.4%p 를 격차라고 적으면, 읽는 사람이 암산해서
         # 맞춰 볼 수 없다. (8주차에 metrics.biggest_gap 에도 같은 규칙을 넣었다)
         val = g.loc[g["전환율"].notna(), "전환율"]
         gap = _shown_gap(val) if len(val) >= 2 else float("nan")

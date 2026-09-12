@@ -172,6 +172,99 @@ def derived(text):
     return out
 
 
+# 축 후보 비교표가 적혀 있는 자리. 한 표가 네 곳에 **손으로 복사돼** 있다.
+# 계산이 한 곳에서 나와도 «옮겨 적은 값»은 한 곳이 아니다 — 실제로 두 값이
+# 어긋나 있었다 (산업 4.7 vs 4.8 · 공고 경쟁도 10.4 vs 10.3).
+#
+# ★ core/metrics.py 와 checks/w9d1_evidence.py 의 주석에도 원값 «10.4%p» 가 있지만
+#   그 둘은 **틀린 예로** 적어 둔 것이다. 여기서 안 본다 — 규칙을 설명하는
+#   문장까지 고치면 그 규칙이 왜 생겼는지가 사라진다.
+GAP_DOCS = ["core/config.py", "README.md", "발표.md", "판단기준.md"]
+_PP = re.compile(r"(\d+" + chr(92) + r".\d)\s*%p")
+
+
+# 원값을 적어도 되는 자리가 있다 — **왜 그 값을 쓰면 안 되는지 설명하는 문장.**
+# 그 자리까지 고치면 규칙만 남고 까닭이 사라진다.
+#
+# 파일 단위로 봐주지 않는다. 그러면 그 파일에 새로 새어 나온 값도 같이 봐준다.
+# 줄 단위로 보되, 표시가 «원값» 이라는 낱말이다 — 설명하는 문장은 예외 없이
+# 그 낱말을 쓴다. 낱말을 안 쓰고 값만 적었다면 그건 설명이 아니라 주장이다.
+RAW_MARK = "원값"
+
+
+def axis_gaps():
+    """축마다 격차를 두 가지로 낸다 — 표시값끼리 뺀 것과 원값끼리 뺀 것.
+
+    문서가 적어야 하는 것은 앞의 것이다. 뒤의 것은 **문서에 있으면 안 되는 값**이라
+    같이 낸다. 둘이 같은 축은 어차피 구분이 없다.
+    """
+    t = load()
+    shown, raw = {}, {}
+    for axis in metrics.AXES:
+        g = metrics.funnel_by(t, axis)
+        v = g.loc[g["전환율"].notna(), "전환율"]
+        if len(v) < 2:
+            continue
+        shown[axis] = round(round(float(v.max()) * 100, 1)
+                            - round(float(v.min()) * 100, 1), 1)
+        raw[axis] = round((float(v.max()) - float(v.min())) * 100, 1)
+    return shown, raw
+
+
+def raw_slips():
+    """원값으로 뺀 격차가 저장소 어디엔가 남아 있는가.
+
+    ★ 앞의 copied_gaps() 는 «축 이름이 같은 줄에 있는 것»만 본다. 줄글로 적힌
+      원값이 줄글로 섞인 «서류에서 10.4%p 벌어지고» 같은 문장은 못 잡는다.
+      그래서 한 겹 더 둔다 —
+      **어느 축의 원값 격차와 똑같은 수**가 문서에 있으면 옮겨 적다 새어 나온
+      것이다. 표시값과 원값이 같은 축은 애초에 후보에서 빠지므로 오탐이 없다.
+      (3.3%p 같은 다른 %p 는 어느 축의 원값도 아니라 안 걸린다)
+      «원값» 이라고 밝힌 줄은 뺀다 — 왜 그 값을 쓰면 안 되는지 적은 자리다.
+    """
+    shown, raw = axis_gaps()
+    나쁜값 = {f"{raw[a]:.1f}": a for a in raw if raw[a] != shown[a]}
+    if not 나쁜값:
+        return [], 나쁜값
+    hit = []
+    for f in sorted(ROOT.rglob("*.md")) + sorted(ROOT.rglob("*.py")):
+        rel = f.relative_to(ROOT).as_posix()
+        if rel.startswith(("docs/", "outputs/", ".git")):
+            continue
+        for i, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if RAW_MARK in ln:      # 원값이라고 밝힌 자리는 설명이다
+                continue
+            for m in _PP.finditer(ln):
+                if m.group(1) in 나쁜값:
+                    hit.append((rel, i, m.group(1), 나쁜값[m.group(1)],
+                                ln.strip()[:52]))
+    return hit, 나쁜값
+
+
+def copied_gaps():
+    """문서 넷에 «X.X%p» 로 적힌 값이 조회로 나오는 값인가.
+
+    어느 축의 값인지는 문장을 읽어야 알 수 있으므로, 여기서는
+    **조회로 안 나오는 값이 적혀 있는가**만 본다. 그것만으로 4.7 과 10.4 가
+    걸린다 — 옮겨 적다 어긋난 값은 어느 축에서도 안 나오기 때문이다.
+    같은 줄에 축 이름이 있는 것만 본다. 이 문서들에는 축 격차가 아닌 %p 도 있다.
+    """
+    want = {f"{v:.1f}" for v in axis_gaps()[0].values()}
+    names = list(metrics.AXES)
+    bad = []
+    for name in GAP_DOCS:
+        f = ROOT / name
+        if not f.exists():
+            continue
+        for i, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if not any(a in ln for a in names):
+                continue
+            for m in _PP.finditer(ln):
+                if m.group(1) not in want:
+                    bad.append((name, i, m.group(1), ln.strip()[:58]))
+    return bad, sorted(want)
+
+
 def main():
     if not DOC.exists():
         print(f"{DOC.name} 가 없다.")
@@ -201,6 +294,28 @@ def main():
         print(f"\n어긋난 값 {len(bad)}개 — 고칠 쪽은 문서다.")
         return 1
     print(f"\n{len(dv)}개 전부 같다.")
+
+    print("\n문서 넷에 손으로 옮겨 적은 축 격차\n")
+    bad2, want = copied_gaps()
+    print("  조회로 나오는 값: "
+          + " · ".join(w + "%p" for w in want))
+    for name, i, got, ln in bad2:
+        print(f"  [다름] {name}:{i}  «{got}%p» — {ln}")
+    if bad2:
+        print(f"\n조회로 안 나오는 값 {len(bad2)}곳 — 고칠 쪽은 문서다.")
+        return 1
+    print(f"  문서 {len(GAP_DOCS)}개 전부 조회값과 같다.")
+
+    hit, 나쁜값 = raw_slips()
+    print("  원값으로 빼면 나오는 값: "
+          + (" · ".join(f"{v}%p({a})" for v, a in 나쁜값.items()) or "없음")
+          + f" — 저장소 전체에서 찾는다 («{RAW_MARK}» 이라고 밝힌 줄은 뺀다)")
+    for rel, i, got, axis, ln in hit:
+        print(f"  [새어 나옴] {rel}:{i}  «{got}%p» = {axis} 의 원값 — {ln}")
+    if hit:
+        print(f"\n원값으로 뺀 값 {len(hit)}곳 — 표시값끼리 뺀 값으로 고친다.")
+        return 1
+    print("  저장소 어디에도 안 남아 있다.")
     return 1 if no_cause() else 0
 
 

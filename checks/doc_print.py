@@ -29,6 +29,10 @@ from report import proposal as P  # noqa: E402
 # 브라우저가 인쇄할 때 잡는 폭이 이것이다.
 A4_PX = round((210 - 16 * 2) / 25.4 * 96)
 
+# 밖으로 나가는 주제. w9d4_submit.py 와 같은 값이어야 한다 — 두 곳에 두면
+# HTML 과 PDF 가 다른 주제가 되는 날이 온다.
+SUBMIT_TOPIC = "축:공고 경쟁도"
+
 # 넘치는 요소를 찾는다. 폭이 아니라 «오른쪽 끝»을 본다 —
 # 폭이 맞아도 왼쪽으로 밀려 있으면 오른쪽이 잘린다.
 FIND_OVER = """(w) => {
@@ -79,6 +83,12 @@ def main():
                 page.pdf(path=str(pdf), format="A4", print_background=True)
                 n = f"{len(PdfReader(str(pdf)).pages)}쪽"
                 pages.append(len(PdfReader(str(pdf)).pages))
+            # 제출본만 PDF 로도 남긴다. 교안 준비물이 «제안서 (HTML·PDF)» 인데
+            # 브라우저가 이미 열려 있으니 여기서 한 번에 낸다. 나머지 열일곱은
+            # 폭을 재려고 만든 것이라 임시 자리에 두고 지운다.
+            if PdfReader and x["키"] == SUBMIT_TOPIC:
+                page.pdf(path=str(config.OUT / "제출본_제안서.pdf"),
+                         format="A4", print_background=True)
             mark = "걸림" if over else "지킴"
             if over:
                 bad.append((x["제목"], over))
