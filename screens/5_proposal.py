@@ -73,14 +73,20 @@ def _submitted():
         return
 
     doc = SUBMITTED.read_text(encoding="utf-8")
+    # ★ 지문이 «어느 문서인가»를 말하고, 시각은 참고다. 파일 시각은 **서버 시계**를
+    #   따라서 내 PC 10:33 이 배포본에서는 06:29 로 보였다 — 같은 파일인데 시각이
+    #   다르면 다른 문서로 읽는다. 어느 시계인지 밝히고, 지문을 앞에 둔다.
     지문 = hashlib.sha256(doc.encode("utf-8")).hexdigest()[:12]
-    적힌날 = _dt.datetime.fromtimestamp(SUBMITTED.stat().st_mtime)
+    적힌날 = _dt.datetime.fromtimestamp(SUBMITTED.stat().st_mtime,
+                                     tz=_dt.timezone.utc)
 
     with st.expander("제출본 — 낸 그 문서", expanded=True):
         st.caption(
-            f"만든 시각 {적힌날:%Y-%m-%d %H:%M} · {len(doc) / 1024:.0f}KB · "
-            f"지문 `{지문}` — 아래 화면은 **이 파일을 그대로 띄운 것**이고 "
-            f"다시 계산하지 않습니다. 새로 쓰려면 이 상자를 접고 아래로 갑니다.")
+            f"지문 `{지문}` · {len(doc) / 1024:.0f}KB · "
+            f"파일 시각 {적힌날:%Y-%m-%d %H:%M} UTC — 아래 화면은 "
+            f"**이 파일을 그대로 띄운 것**이고 다시 계산하지 않습니다. "
+            f"어느 문서인지는 **지문**으로 맞춥니다 (시각은 서버 시계를 따릅니다). "
+            f"새로 쓰려면 이 상자를 접고 아래로 갑니다.")
         components.html(doc, height=900, scrolling=True)
         st.download_button(
             "제출본 내려받기 (HTML 한 장)", doc,
