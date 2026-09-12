@@ -103,6 +103,35 @@ def main():
                     f"{c['제목']} 크기 {m.group(1)}"
                     f"(격차 {m.group(2)} × 비중 {m.group(3)}) "
                     f"≠ 조회 {want}(격차 {gap} × 비중 {share})")
+        # ★ 시간 환산도 손으로 쓴 숫자다. 건당 시간은 config 의 상수라
+        #   거기를 고치는 날이 온다 — 실측이 들어오는 날이다. 그때 카드를
+        #   같이 안 고치면 문서가 옛 추정을 그대로 말한다.
+        #   열쇠에 시간 값을 박지 않는다. 카드에서 뽑아 조회값과 견준다.
+        hc = metrics.hours_cost(x)
+        if hc:
+            맞는범위 = {hc["건당"], hc["지금"], hc["바꾼뒤"], hc["아끼는"]}
+            for fld in ("비용", "효과"):
+                for a, b in re.findall(r"([\d.]+)~([\d.]+)시간", c.get(fld, "")):
+                    if (float(a), float(b)) not in 맞는범위:
+                        card_num.append(f"{c['제목']} {fld} {a}~{b}시간 "
+                                        f"≠ 조회 " + " · ".join(
+                                            f"{u:g}~{v:g}" for u, v in sorted(맞는범위)))
+            쓴비율 = re.findall(r"([\d.]+)% ", c.get("비용", ""))
+            if 쓴비율 and str(hc["줄어드는비율"]) not in 쓴비율:
+                card_num.append(f"{c['제목']} 비용 {쓴비율} "
+                                f"≠ 조회 {hc['줄어드는비율']}%")
+            # 공수에 적은 「옮기는 양 × 건당 시간」 도 다시 곱한다.
+            m = re.search(r"한 분기 ([\d,]+)건", c.get("공수", ""))
+            m2 = re.search(r"([\d,]+)~([\d,]+)시간", c.get("공수", ""))
+            if m and m2:
+                n = int(m.group(1).replace(",", ""))
+                want = (round(n * hc["건당"][0]), round(n * hc["건당"][1]))
+                got = tuple(int(g.replace(",", "")) for g in m2.groups())
+                if got != want:
+                    card_num.append(f"{c['제목']} 공수 {got[0]}~{got[1]}시간 "
+                                    f"≠ {n}건 × {hc['건당'][0]:g}~{hc['건당'][1]:g}시간 "
+                                    f"= {want[0]}~{want[1]}")
+
     ok(not card_num, "카드에 손으로 쓴 숫자가 조회값과 같다",
        " / ".join(card_num[:3]) or
        "주제에 붙은 카드의 효과·크기를 다시 계산해서 견줬다")
