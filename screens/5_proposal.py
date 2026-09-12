@@ -63,8 +63,14 @@ def _section(sec, human, on_save):
                 st.write(md(line))
         else:
             key = sec["키"]
+            # ★ 높이를 150 으로 박아 두었더니, 위험 절이 넉 문단에서 아홉
+            #   문단으로 늘자 뒤쪽이 스크롤 안으로 숨었다. 요청 절에서는
+            #   **결정을 요구하는 마지막 문단**이 안 보였다 — 화면에서 못 읽는
+            #   문장은 안 쓴 것과 같다. 글 길이를 보고 정한다.
+            글 = human.get(key, "")
+            줄 = sum(max(1, len(ln) // 46 + 1) for ln in 글.splitlines()) or 1
             val = st.text_area(
-                sec["제목"], value=human.get(key, ""), height=150,
+                sec["제목"], value=글, height=min(560, max(150, 26 * 줄 + 40)),
                 key=f"pr_{key}", label_visibility="collapsed",
                 placeholder=sec.get("안내", ""))
             if st.button("저장", key=f"prs_{key}"):

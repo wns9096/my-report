@@ -48,18 +48,68 @@ GENERIC = ["퍼널", "전환율", "이탈"]
 
 # 본문에 «열세 곳» 처럼 적어 둔 수를 되읽는다. 숫자로 적으면 이 표가 없어도
 # 되지만, 읽는 글에 «13곳» 이라고 쓰지 않는다.
-_HAN = {"열": 10, "하나": 1, "둘": 2, "셋": 3, "넷": 4, "다섯": 5,
-        "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9,
-        "한": 1, "두": 2, "세": 3, "네": 4}
+_ONES = {"하나": 1, "둘": 2, "셋": 3, "넷": 4, "다섯": 5, "여섯": 6,
+         "일곱": 7, "여덟": 8, "아홉": 9,
+         "한": 1, "두": 2, "세": 3, "네": 4}
+_TENS = {"열": 10, "스물": 20, "스무": 20, "서른": 30, "마흔": 40, "쉰": 50}
+_ONE_RE = "|".join(sorted(_ONES, key=len, reverse=True))
+_TEN_RE = "|".join(sorted(_TENS, key=len, reverse=True))
+# ★ 앞뒤가 한글이면 낱말의 일부다. 이 울타리가 없을 때 «시작한다» 의 «한» 을
+#   1 로 읽어서 «규칙 스무 개» 를 1 이라고 세었다. 낱자로 세면 안 된다.
+_NUM = re.compile(
+    f"(?<![가-힣])(?:({_TEN_RE}))?(?:({_ONE_RE}))?(?![가-힣])")
+
+
+def han(text):
+    """«열세» · «스물넷» · «스무» 에서 수를 꺼낸다. 못 읽으면 -1.
+
+    **마지막 것**을 읽는다. 제목은 «… 열여덟» 처럼 수가 끝에 오고, 앞쪽에는
+    «한 번» 같은 낱말이 섞여 있을 수 있다.
+    """
+    got = -1
+    for m in _NUM.finditer(text):
+        if m.group(1) or m.group(2):
+            got = _TENS.get(m.group(1) or "", 0) + _ONES.get(m.group(2) or "", 0)
+    return got
 
 
 def _han(text):
-    """«열세 곳» 같은 말에서 수를 꺼낸다. 못 읽으면 -1."""
-    m = re.search(r"(열)?(하나|둘|셋|넷|다섯|여섯|일곱|여덟|아홉|한|두|세|네)?\s*곳",
-                  text)
-    if not m:
+    """«열세 곳» 에서 수를 꺼낸다 — 곳 앞의 것만."""
+    m = re.search(r"([가-힣]{1,4})\s*곳", text)
+    return han(m.group(1)) if m else -1
+
+
+def table_rows(doc, heading):
+    """머리글 다음에 처음 나오는 표의 몸통 행 수. 못 찾으면 -1."""
+    i = doc.find(heading)
+    if i < 0:
         return -1
-    return (10 if m.group(1) else 0) + _HAN.get(m.group(2) or "", 0)
+    for block in doc[i:].split("\n" + "\n"):
+        rows = [ln for ln in block.splitlines() if ln.strip().startswith("|")]
+        if len(rows) >= 3:
+            return len(rows) - 2          # 머리행 + 구분행을 뺀다
+    return -1
+
+
+def numbered_rows(doc):
+    """«| 12 |» 처럼 번호가 붙은 표 행의 수."""
+    return len(re.findall(r"^\| \d+ \|", doc, flags=re.M))
+
+
+# 문서가 **제목에** 적어 둔 개수. 제목은 아무도 다시 안 센다 — 표에 한 줄을
+# 더하면서 제목의 수까지 같이 고치는 사람은 없다. 실제로 셋이 어긋나 있었다.
+#
+# ★ 줄을 찾는 열쇠에 **수가 들어가면 안 된다.** 처음에는 «규칙 스무 개» 를
+#   통째로 열쇠로 썼더니, 그 줄의 수를 바꾸면 줄을 못 찾고 **옛 수를 그대로**
+#   썼다 — 일부러 틀리게 넣어 봤는데 안 걸렸다. 검사가 보는 줄이 바로 그
+#   검사가 못 보는 자리였다. 열쇠는 수를 뺀 앞부분이고, 못 찾으면 걸린다.
+#   (파일, 줄을 찾는 정규식, 무엇을 세나)
+COUNT_CLAIMS = [
+    (r"★_채운자리.md", r"^## 도메인을 바꿀 때 고쳐야 하는 자리", "번호행"),
+    (r"★_채운자리.md", r"^## 조용히 틀리는 자리", "표"),
+    (r"README.md", r"^## 이번 주에 실제로 걸린 것", "표"),
+    (r"CLAUDE.md", r"^규칙 \S+ 개\.", "불릿"),
+]
 
 
 results = []
@@ -155,6 +205,31 @@ def main():
     적힌 = _han(본문)
     ok(적힌 == 센값, "「적용」 절이 적어 둔 일반 용어 수가 맞다",
        f"적힌 {적힌} · 세어 보니 {센값}")
+    print("\n── 문서가 제목에 적어 둔 개수를 다시 센다 ──")
+    for path, key, what in COUNT_CLAIMS:
+        f = ROOT / path
+        이름 = f"{path} — 「{key.strip('^').lstrip('# ')[:24]}」"
+        if not f.exists():
+            ok(False, 이름, "파일이 없다")
+            continue
+        d = f.read_text(encoding="utf-8")
+        line = next((ln for ln in d.splitlines() if re.match(key, ln)), None)
+        if line is None:
+            ok(False, 이름, "그 줄을 못 찾았다 — 문서가 바뀌었으면 열쇠도 고친다")
+            continue
+        m = re.search(r"(\d+)", line)
+        적힌 = int(m.group(1)) if m else han(line.split(".")[0])
+        센값 = (numbered_rows(d) if what == "번호행"
+                else len(re.findall(r"^- ", d, flags=re.M)) if what == "불릿"
+                else table_rows(d, line))
+        ok(적힌 == 센값, 이름, f"적힌 {적힌} · 세어 보니 {센값}")
+
+    from checks import run_all as _ra
+    m = re.search(r"run_all\.py\s+(\d+)/(\d+)", ans)
+    ok(m and int(m.group(1)) == int(m.group(2)) == len(_ra.STEPS),
+       "답변지가 적어 둔 run_all 수가 맞다",
+       (m.group(0) if m else "못 찾음") + f" · 지금 {len(_ra.STEPS)}단계")
+
     거절 = ans.count("안 받아들인다")
     맞나 = f"안 고친 것이 {거절}건" in ans
     ok(맞나, "답변지가 적어 둔 «안 고친 것» 수가 맞다",
