@@ -149,6 +149,25 @@ def main():
         ok(False, "제출본 제안서가 있다", f"{SUBMIT.name} 가 없다")
         ok(False, "제안서에 결정을 요구하는 「요청」 줄이 있다")
 
+    # 낸 문서를 **읽을 수 있는가.** 화면에 붙어 있고, 게이트 앞에 있는가.
+    #
+    # ★ 순서가 뒤집혀도 내 화면은 멀쩡해 보인다 — 나는 이미 게이트를 지났으니까.
+    #   처음 여는 사람에게만 달라진다. 그래서 사람 눈이 아니라 기계가 본다.
+    scr = (ROOT / "screens" / "5_proposal.py").read_text(encoding="utf-8")
+    붙임 = "SUBMITTED.read_text" in scr and "components.html(doc" in scr
+    ok(붙임, "제출본이 제안서 화면에 붙어 있다",
+       "SUBMITTED 를 읽어 components.html 로 그린다" if 붙임 else "화면이 파일을 안 읽는다")
+
+    앞 = scr.find("_submitted()\n")
+    문 = scr.find("shell.guard(")
+    ok(앞 > 0 and 문 > 0 and 앞 < 문,
+       "제출본이 게이트보다 **앞**에 있다",
+       f"제출본 {앞} · 게이트 {문}" if 앞 > 0 and 문 > 0 else "둘 중 하나를 못 찾았다")
+
+    # 다시 조립해서 보여 주면 «낸 것»과 «지금 나오는 것»이 갈린다.
+    ok("다시 계산하지 않습니다" in scr,
+       "화면이 «다시 계산하지 않는다»고 밝힌다")
+
     # ── 4 답변지 ─────────────────────────────────────────────────────────
     ans = ANSWERS.read_text(encoding="utf-8") if ANSWERS.exists() else ""
     ok(ans and re.search(r"\*\*A\*\*", ans) and re.search(r"\*\*C\*\*", ans),

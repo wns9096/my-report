@@ -197,7 +197,7 @@ my-report/
 | 세는 단위 | 사람 퍼널은 지원자 1명 · 분해는 지원 1건 |
 | 저장소 | <https://github.com/wns9096/my-report> (`main` · 진입점 `app.py`) |
 | 배포처 | Streamlit Community Cloud |
-| **배포 URL** | `(여기에 적는다)` |
+| **배포 URL** | <https://my-report-hj.streamlit.app/> (대시보드 `/dashboard` · 제안서 `/proposal`) |
 
 > **배포 URL 은 손으로 적어야 한다.** Streamlit Community Cloud 는 공식 배포
 > API 가 없어서 주소가 코드에서 안 나온다 — <https://share.streamlit.io> 의 앱
@@ -205,6 +205,12 @@ my-report/
 > **찾다가 남의 앱 주소를 적게 된다.** 실제로 `my-report.streamlit.app` 은 이
 > 앱이 아니다(실제 브라우저로 열어 보니 «Not found») — 이름이 흔해서 이미 누가
 > 쓰고 있다. `python checks/w9d5_close.py` 가 이 칸이 비었는지 알려 준다.
+>
+> **2026-09-12 확인.** 쿠키 없는 브라우저로 열어 봤다. 익명으로 들어가면
+> `303 → share.streamlit.io/-/auth/app` 으로 한 번 튕기는데 **이것은 로그인
+> 벽이 아니라 세션 쿠키를 받는 과정**이고, 곧바로 앱으로 돌아와 대시보드가
+> 그려진다. 헤더의 303 만 보고 «남이 못 연다»고 단정할 뻔했다 —
+> **리디렉션은 끝까지 따라가 봐야 무엇인지 안다.**
 
 배포 전에 확인한 것 넷.
 

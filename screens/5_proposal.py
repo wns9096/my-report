@@ -8,6 +8,9 @@
 화면은 거르지 않는다. 거르는 자리는 조립기(`report/proposal.py`) 한 곳뿐이다 —
 두 곳에서 거르면 화면에 뜬 절과 내려받은 문서가 달라진다.
 """
+import datetime as _dt
+import hashlib
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -16,6 +19,9 @@ from report import proposal as P
 from viz import proposal_charts as pcharts
 
 ALL = "전체 — 후보 목록만 봅니다"
+
+# 강사에게 낸 파일. `checks/w9d4_submit.py` 가 만들고 저장소에 같이 남긴다.
+SUBMITTED = config.OUT / "제출본_제안서.html"
 
 # ★ 칸 이름에 ~ 가 들어간다(«0.65~1.00»). Streamlit 의 글쓰기 함수는 마크다운을
 #   해석해서 ~ 로 감싼 부분을 취소선으로 그린다 — 화면에 «0.65 1.00» 이 줄 그어진
@@ -47,6 +53,42 @@ def _topic_table(topics):
         "단위": t.get("단위", ""),
         "기각 사유": t["기각사유"] or "",
     } for t in topics])
+
+
+def _submitted():
+    """**낸 그 파일**을 그대로 띄운다. 여기서 다시 조립하지 않는다.
+
+    ★ 이 화면은 «만드는 화면» 이었다. 배포 주소를 연 사람은 게이트 2를 지나고
+      주제를 고르고 절을 스크롤한 뒤에야 제안서를 볼 수 있었다 — **읽으러 온
+      사람에게 문이 셋이었다.** 낸 문서는 읽는 것이지 만드는 것이 아니다.
+
+    ★ 다시 조립해서 보여 주고 싶은 유혹이 있다(최신이니까). 그러면 «낸 것»과
+      «지금 나오는 것»이 갈리고, 갈린 줄 모른 채 둘 다 «제안서» 라고 부르게
+      된다. 파일에 있는 글자를 그대로 띄우고, **지문을 같이 적는다.**
+    """
+    if not SUBMITTED.exists():
+        st.info(f"제출본이 아직 없습니다 — `python checks/w9d4_submit.py` 가 "
+                f"`{SUBMITTED.name}` 를 만듭니다. 아래에서 새로 쓸 수 있습니다.",
+                icon=":material/draft:")
+        return
+
+    doc = SUBMITTED.read_text(encoding="utf-8")
+    지문 = hashlib.sha256(doc.encode("utf-8")).hexdigest()[:12]
+    적힌날 = _dt.datetime.fromtimestamp(SUBMITTED.stat().st_mtime)
+
+    with st.expander("제출본 — 낸 그 문서", expanded=True):
+        st.caption(
+            f"만든 시각 {적힌날:%Y-%m-%d %H:%M} · {len(doc) / 1024:.0f}KB · "
+            f"지문 `{지문}` — 아래 화면은 **이 파일을 그대로 띄운 것**이고 "
+            f"다시 계산하지 않습니다. 새로 쓰려면 이 상자를 접고 아래로 갑니다.")
+        components.html(doc, height=900, scrolling=True)
+        st.download_button(
+            "제출본 내려받기 (HTML 한 장)", doc,
+            file_name=SUBMITTED.name, mime="text/html",
+            key="dl_submitted")
+        st.caption(
+            "인쇄하면 A4 여러 쪽으로 맞습니다. 외부 CSS·이미지·CDN 을 쓰지 "
+            "않아서 인터넷 없이도 같은 모양으로 열립니다.")
 
 
 def _section(sec, human, on_save):
@@ -109,6 +151,15 @@ ctx, tables, _missing = shell.load()
 st.subheader("제안서")
 st.caption(f"읽는 사람은 **{config.PROPOSAL_READER}** 입니다. 읽고 나서 "
            f"{' · '.join(config.PROPOSAL_WORDS['결정'])} 중 하나가 나와야 합니다.")
+
+# 읽는 것이 먼저다. **게이트 앞에 둔다** — 낸 문서를 보려고 데이터를 다시
+# 돌리게 하면, 돌릴 줄 모르는 사람은 제안서를 못 본다.
+_submitted()
+
+st.divider()
+st.markdown("##### 새로 쓰기")
+st.caption("아래는 **만드는 화면**입니다. 주제를 골라 절을 채우고 새 문서를 "
+           "내보냅니다. 위 제출본은 이것과 별개로 파일에 남아 있습니다.")
 if not shell.guard(ctx, need_gate=2):
     st.stop()
 
