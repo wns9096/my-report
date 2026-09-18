@@ -214,23 +214,45 @@ def r10_single_source():
                 else "화면·문서 모두 core/context.py 가 만든 값을 쓴다")
 
 
+# 손으로 박으면 테마를 안 따라오는 것들. 색이면 무엇이든 여기 걸린다.
+_COLORISH = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|(?<!-)\bcolor\s*:",
+                       re.I)
+# 손으로 쓴 스타일을 둘 수 있는 **유일한** 파일.
+_STYLE_HOME = "core/shell.py"
+
+
 def r11_no_raw_html():
     """카드·배지를 직접 쓴 HTML 로 그리지 않는가.
 
-    직접 쓴 HTML 은 테마를 안 따라간다. 밝은 테마용으로 박은 회색이
-    어두운 테마에서 그대로 남아, 판정 색만 엉뚱하게 튄다.
-    st.container(border=True) · st.badge · st.metric 이 같은 일을 한다.
+    ★ 예전에는 unsafe_allow_html 이 보이기만 하면 걸었다. 막으려던 것은
+      HTML 자체가 아니라 **손으로 박은 색**이다 — 밝은 테마용 회색이 어두운
+      테마에 그대로 남아 판정 색만 엉뚱하게 튄다. 그래서 규칙을 뜻대로 고쳤다.
+      느슨해진 것이 아니다. 조건이 둘로 늘었다 —
+
+        · 색이 한 글자라도 섞이면 걸린다 (#hex · rgb · color:)
+        · 스타일을 둘 수 있는 파일은 core/shell.py 하나뿐이다
+
+      카드·배지·테두리는 여전히 st.container(border=True) · st.badge ·
+      st.metric 으로 그린다. 여기서 허용되는 것은 색이 없는 서체 규칙뿐이다.
     """
     bad = []
     for p in SRC:
         rel = p.relative_to(ROOT).as_posix()
         txt = p.read_text(encoding="utf-8")
         for i, line in enumerate(txt.splitlines(), 1):
-            if "unsafe_allow_html" in line and not line.lstrip().startswith("#"):
-                bad.append(f"{rel}:{i}")
+            if "unsafe_allow_html" not in line or line.lstrip().startswith("#"):
+                continue
+            if rel != _STYLE_HOME:
+                bad.append(f"{rel}:{i} — 스타일은 {_STYLE_HOME} 한 곳에만 둔다")
+        if rel == _STYLE_HOME:
+            for m in re.finditer(r"<style>(.*?)</style>", txt, re.S):
+                found = _COLORISH.findall(m.group(1))
+                if found:
+                    bad.append(f"{rel} 스타일에 색이 있다: {' '.join(found[:3])}")
     return note("11 직접 쓴 HTML 없음", not bad,
                 "; ".join(bad) if bad
-                else "카드·배지·테두리는 전부 Streamlit 요소로 그린다")
+                else f"카드·배지·테두리는 전부 Streamlit 요소로 그린다 · "
+                     f"손으로 쓴 스타일은 {_STYLE_HOME} 의 서체 규칙 하나 (색 0개)")
 
 
 # 근거가 «무엇에서 온 값인지» 말하려면 이 중 하나는 있어야 한다.

@@ -39,6 +39,27 @@ for col, g in zip(cols, (1, 2, 3)):
             else:
                 st.caption("아직 통과하지 않음")
 
+            # ★ 「되돌릴 수 있음」이 글자로만 있었다. 되돌리는 자리가 없으면
+            #   그 말은 확인할 수 없고, 게이트 3의 「없음」도 마찬가지로 아무것도
+            #   막지 않는다. 막는 것은 gates.revoke() 의 분기 조건이고
+            #   여기는 그것을 부르는 자리다 — 화면이 규칙을 만들지 않는다.
+            if last and info["reversible"]:
+                with st.expander("되돌리기"):
+                    why = st.text_input(
+                        "되돌리는 근거", key=f"undo_reason_{g}",
+                        placeholder="무엇을 다시 보게 됐는지 적습니다")
+                    if st.button("이 게이트를 되돌린다", key=f"undo_{g}"):
+                        try:
+                            gates.revoke(g, why)
+                        except ValueError as e:
+                            st.error(f"{e} — 근거 없이 되돌리면 "
+                                     f"기록이 «무슨 일이 있었나»에 답하지 못합니다.")
+                        else:
+                            st.rerun()
+            elif last:
+                st.caption("이미 나간 뒤라 되돌릴 수 없습니다. "
+                           "다시 내보내려면 새로 통과시킵니다.")
+
 st.divider()
 st.markdown("#### 전체 이력")
 df = pd.DataFrame([{

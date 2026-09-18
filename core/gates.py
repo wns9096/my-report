@@ -32,9 +32,41 @@ def record(gate: int, reason: str, context: dict | None = None) -> dict:
     row = {
         "gate": gate,
         "name": GATES[gate]["name"],
+        "kind": "pass",
         "at": datetime.now().isoformat(timespec="seconds"),
         "reason": reason,
         "context": context or {},
+    }
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return row
+
+
+def revoke(gate: int, reason: str) -> dict:
+    """게이트를 되돌린다. **게이트 3은 거부한다.**
+
+    ★ 교안 11-2 — 「되돌림 불가는 주석이 아니라 분기 조건이어야 합니다.
+      문구로만 적어두면 언젠가 되돌려집니다.」 여기가 딱 그 자리였다.
+      `reversible` 이 표에 있었는데 **화면에 글자로 찍히기만 했다.** 아무것도
+      막지 않는 값은 지켜지는 것처럼 보일 뿐이다.
+
+    지우지 않는다. 「되돌렸다」를 한 줄 더 쌓는다 — 지우면 되돌린 일 자체가
+    기록에서 사라지고, 거버넌스 기록이 「무슨 일이 있었나」에 답하지 못한다.
+    """
+    if not GATES[gate]["reversible"]:
+        raise PermissionError(
+            f"{GATES[gate]['name']} 은 되돌릴 수 없다. 이미 나간 뒤다 — "
+            f"되돌릴 수 있으면 「발송」이 아니다. 다시 내보내려면 새로 통과시킨다.")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("근거 없이 되돌릴 수 없다")
+    row = {
+        "gate": gate,
+        "name": GATES[gate]["name"],
+        "kind": "revoke",
+        "at": datetime.now().isoformat(timespec="seconds"),
+        "reason": reason,
+        "context": {},
     }
     with LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -52,9 +84,16 @@ def history() -> list[dict]:
 
 
 def passed(gate: int) -> dict | None:
-    """가장 최근 통과 기록. 없으면 None."""
+    """가장 최근 통과 기록. 없거나 되돌린 뒤면 None.
+
+    ★ 마지막 줄이 「되돌림」이면 통과가 아니다. 예전 기록에는 kind 가 없는데
+      그때는 통과만 쌓았으므로 없으면 통과로 본다.
+    """
     rows = [r for r in history() if r["gate"] == gate]
-    return rows[-1] if rows else None
+    if not rows:
+        return None
+    last = rows[-1]
+    return None if last.get("kind") == "revoke" else last
 
 
 def is_ephemeral():

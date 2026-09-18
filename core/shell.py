@@ -41,6 +41,19 @@ def load():
     return ctx, tables, missing
 
 
+# ★ 교안 9-1 — 「지표 숫자에 tabular-nums」. 자릿수 폭이 제각각이면 값이
+#   바뀔 때마다 숫자가 좌우로 흔들리고, 표에서는 자릿수가 안 맞아 견주기가
+#   어렵다. 인쇄용 제안서에는 걸어 두고 **화면에는 안 걸려 있었다.**
+#
+#   여기는 이 앱에서 손으로 쓴 스타일을 넣는 **유일한 자리**다. 색은 한 글자도
+#   없다 — 색을 손으로 박으면 테마를 안 따라가고, 그것이 「직접 쓴 HTML 금지」
+#   규칙(앱점검 11)이 막으려던 것이다. 서체 폭은 테마와 무관하다.
+_NUMERALS = """<style>
+[data-testid="stMetricValue"], [data-testid="stMetricDelta"],
+[data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; }
+</style>"""
+
+
 def topbar():
     """화면 전부에 뜨는 맥락 줄.
 
@@ -48,6 +61,7 @@ def topbar():
     밝은 테마용 회색이 어두운 배경에 그대로 남는다.
     container(border=True) 는 테마를 따라간다.
     """
+    st.markdown(_NUMERALS, unsafe_allow_html=True)
     with st.container(border=True):
         # 칸을 넷으로 쪼개면 좁은 화면에서 «2025-01-01 ~ 2025-12-» / «31» 로 끊긴다.
         # 둘로 두고, 끊기면 안 되는 것끼리 묶는다.
