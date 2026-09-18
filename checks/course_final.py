@@ -86,6 +86,19 @@ def main():  # noqa: C901
          < po["company"].nunique()),
         ("과제 있는 전형과 없는 전형", bool(po["has_test"].any() and (~po["has_test"]).any()),
          "과제·테스트 통과" in config.NON_FUNNEL),
+        # ★ 목록에는 일곱을 적어 두고 검사는 다섯만 세고 있었다. 적어 둔 것과
+        #   세는 것이 다르면 그것은 정답지가 아니다 — 읽는 사람은 일곱 다
+        #   확인된 줄로 안다. 나머지 둘을 여기서 센다.
+        ("경쟁 강도가 서류 통과를 내린다",
+         any(t["키"] == "축:공고 경쟁도" and (t.get("격차") or 0) > 0
+             for t in metrics.proposal_topics(tables)),
+         config.DECOMP_AXIS == "공고 경쟁도"),
+        # ★ 이 둘을 같은 식으로 재면 늘 같이 참이라 아무것도 안 본다.
+        #   심은 것은 «시작일이 관측창 안에 흩어져 있다»(데이터의 모양),
+        #   잡는 것은 «관측이 덜 찬 코호트를 못 믿을 것으로 판정한다»(앱의 일).
+        ("늦게 시작한 사람은 관측이 짧다",
+         (apl["start_date"].max() - apl["start_date"].min()).days > 300,
+         bool(metrics.cohort_by_start_month(tables)["못 믿을 사유"].notna().any())),
     ]
     심음 = [n for n, s, _ in 심은것 if s]
     잡음 = [n for n, s, c in 심은것 if s and c]
