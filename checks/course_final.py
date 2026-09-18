@@ -179,9 +179,10 @@ def main():  # noqa: C901
        f"표 {len(tables)}개가 {mb:.1f}MB (무료 한도 1,024MB)")
 
     ign = (ROOT / ".gitignore").read_text(encoding="utf-8")
-    빠진 = [p for p in ("secrets.toml", "fonts/*.ttf") if p not in ign]
+    빠진 = [p for p in ("secrets.toml", "fonts/*.ttf", "*credentials*.json")
+            if p not in ign]
     ok(not 빠진, "비밀·못 올릴 파일이 .gitignore 에 있다",
-       f"빠진 것 {빠진}" if 빠진 else "secrets.toml · fonts/*.ttf")
+       f"빠진 것 {빠진}" if 빠진 else "secrets.toml · fonts/*.ttf · 인증 키")
 
     # 공개 저장소에 업무 데이터가 섞이지 않았는가 — **찾기만 한다.**
     # 지우는 것은 사람이 정한다. 검사가 지우면 무엇이 지워졌는지 아무도 모른다.
@@ -204,10 +205,12 @@ def main():  # noqa: C901
             if ".git" not in p.parts
             and "use_container_width" in p.read_text(encoding="utf-8")]
     if 쓴곳:
+        # ★ 판 번호를 손으로 적어 두면 올리고 나서도 옛 번호를 말한다.
+        #   지금 깔린 것을 읽는다.
+        import streamlit as st
         print(f"     · use_container_width 는 사용 중단 예정이다 (교안 13-2). "
-              f"{len(쓴곳)}개 파일에 있다. 지금 streamlit 은 "
-              f"{config.__dict__.get('_st_ver', '1.45')} 대라 width=\"stretch\" 가 "
-              f"아직 없다 — 올리는 날 같이 바꾼다")
+              f"{len(쓴곳)}개 파일에 있다. 지금 깔린 streamlit 은 {st.__version__} "
+              f"이고 width=\"stretch\" 는 1.49 부터다 — 올리는 날 같이 바꾼다")
 
     bad = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(bad)}/{len(results)} 지킴")

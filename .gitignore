@@ -12,3 +12,8 @@ outputs/*.pdf
 # doc_print.py 가 종이 폭을 재려고 잠깐 만드는 자리. 산출물이 아니다.
 outputs/_print/
 !outputs/gates.jsonl
+
+# 인증 키. 한 번 올라가면 커밋을 지워도 이력에 남는다 (교안 11-2).
+# 이 앱은 키를 안 쓰지만, 안 쓰는 동안 걸어 두는 것이 그물이다.
+*credentials*.json
+*service-account*.json
