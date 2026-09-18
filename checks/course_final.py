@@ -26,6 +26,7 @@ from checks._console import use_utf8  # noqa: E402
 use_utf8()
 
 from core import config, gates, loader, metrics, validate  # noqa: E402
+from report import proposal as P  # noqa: E402
 
 results = []
 
@@ -145,6 +146,31 @@ def main():  # noqa: C901
     ok(되나, "게이트 1·2는 되돌릴 수 있고, 근거 없이는 안 된다",
        "근거가 비면 ValueError")
 
+    # ★ 위 둘은 함수를 직접 부른 것이다. **버튼은 아직 안 눌러 봤다.**
+    #   화면이 그 함수를 안 부르고 있어도 위 둘은 통과한다 — 그래서 실제
+    #   Streamlit 런타임을 띄워 누른다. 기록 파일은 반드시 되돌려 놓는다:
+    #   검사가 남긴 줄이 그대로 남으면 게이트 1이 되돌려진 채로 배포된다.
+    from checks.ui_smoke import run as _화면
+    원래 = gates.LOG.read_text(encoding="utf-8") if gates.LOG.exists() else ""
+    눌렀다 = 되돌렸다 = False
+    try:
+        at = _화면("아카이브")
+        키 = [w.key for w in at.button if str(w.key).startswith("undo_")]
+        눌렀다 = "undo_1" in 키 and "undo_3" not in 키
+        if "undo_1" in 키:
+            at.text_input(key="undo_reason_1").set_value("검사가 눌러 본다").run()
+            at.button(key="undo_1").click().run()
+            되돌렸다 = gates.passed(1) is None and not at.exception
+    finally:
+        gates.LOG.write_text(원래, encoding="utf-8")
+    ok(눌렀다, "되돌리기 버튼이 게이트 1·2 에만 있다",
+       "게이트 3 에는 버튼 대신 «이미 나간 뒤» 안내만 있다" if 눌렀다
+       else f"버튼 키 {키}")
+    ok(되돌렸다, "버튼을 누르면 실제로 되돌아간다 (AppTest)",
+       "누른 뒤 gates.passed(1) 이 None · 기록 파일은 되돌려 놓았다" if 되돌렸다
+       else "버튼을 못 눌렀거나 눌러도 상태가 안 바뀌었다 — "
+            "화면이 gates.revoke() 를 안 부르고 있을 수 있다")
+
     맡김("차단일 때 통과 버튼이 잠긴다", "checks/day1_break.py · sandbox_break.py")
     맡김("게이트 통과 기록에 근거가 있다", "checks/app_audit.py 8")
     맡김("단계별 숫자를 손계산으로 대조했다", "checks/day2_crosscheck.py")
@@ -164,6 +190,29 @@ def main():  # noqa: C901
     맡김("해석·제안이 비면 «작성되지 않음»이 찍힌다", "checks/app_audit.py 4")
     맡김("제안에 «하지 말 것»이 있다", "checks/w9d3_proposal.py")
     맡김("제안 근거를 앱에서 조회했다 (분자·분모·비교·비중)", "checks/w9d1_verify.py")
+
+    # ★ 교안 9-4 — 「Noto Sans KR 에 그리스 문자가 없다. α=0.05 는 PDF 에서
+    #   사라진다」. 지워지는 글자는 오류를 안 낸다. 그래서 **나가는 글**을
+    #   훑는다. 주석·코드가 아니라 실제로 종이에 얹히는 글만 본다.
+    없는글자 = re.compile(r"[Ͱ-Ͽἀ-῿]")
+    나가는글 = []
+    for f in (config.OUT / "제출본_제안서.html", config.OUT / "제안서.html"):
+        if f.exists():
+            나가는글 += [(f.name, c) for c in
+                         set(없는글자.findall(f.read_text(encoding="utf-8")))]
+    ok(not 나가는글, "문서에 폰트가 못 그리는 글자가 없다",
+       f"{나가는글}" if 나가는글
+       else "그리스 문자 0개 — σ·α 는 주석에만 있고 문서로 안 나간다")
+
+    # ★ 교안 10-4 — 제안 문서를 **만들지 않는** 조건 넷. 앞의 셋은 카드 검사가
+    #   보고 있어서 맡긴다. 넷째만 여기서 본다 — 「근거가 화면에서 감춘
+    #   항목이면 제안에 쓰지 않는다」. 감춘 것을 근거로 쓰면 감춘 의미가 없다.
+    붙은카드 = {c.get("주제키") for c in P.load_cards()}
+    감춘근거 = [t["키"] for t in metrics.proposal_topics(tables)
+                if t["키"] in 붙은카드 and t.get("감춘칸")]
+    ok(not 감춘근거, "감춘 항목을 근거로 쓴 제안이 없다",
+       f"감춘 칸이 있는 주제에 카드가 붙어 있다: {감춘근거}" if 감춘근거
+       else f"카드가 붙은 주제 {len(붙은카드 & {t['키'] for t in metrics.proposal_topics(tables)})}개 전부 감춘 칸 0")
 
     # ── 화면 · 배포 ──────────────────────────────────────────────────────
     print("\n── 화면 · 배포 ──")
@@ -199,18 +248,25 @@ def main():  # noqa: C901
     맡김("PDF 한글이 안 깨진다", "checks/doc_print.py")
     맡김("AppTest 로 버튼을 눌러 확인했다", "checks/run_gates.py")
 
-    # ── 알림 — 세지 않는다 ───────────────────────────────────────────────
-    print("\n── 알림 (걸림으로 세지 않는다) ──")
+    # ★ 교안 13-2 — use_container_width 는 사용 중단 예정이고 width="stretch"
+    #   로 바뀐다. 지금 깔린 판에는 새 이름이 아직 없어서 **지금 바꾸면 깨진다.**
+    #   그렇다고 알림만 찍어 두면 판이 올라간 날 아무도 안 본다 — 배포처가
+    #   알아서 올려 주기 때문에 «올린 날»이 내가 고르는 날이 아니다.
+    #   그래서 **문지기**로 둔다: 새 이름을 쓸 수 있게 된 순간부터 걸린다.
     쓴곳 = [p.relative_to(ROOT).as_posix() for p in ROOT.rglob("*.py")
             if ".git" not in p.parts
             and "use_container_width" in p.read_text(encoding="utf-8")]
-    if 쓴곳:
-        # ★ 판 번호를 손으로 적어 두면 올리고 나서도 옛 번호를 말한다.
-        #   지금 깔린 것을 읽는다.
-        import streamlit as st
-        print(f"     · use_container_width 는 사용 중단 예정이다 (교안 13-2). "
-              f"{len(쓴곳)}개 파일에 있다. 지금 깔린 streamlit 은 {st.__version__} "
-              f"이고 width=\"stretch\" 는 1.49 부터다 — 올리는 날 같이 바꾼다")
+    import streamlit as st
+    판 = tuple(int(x) for x in re.findall(r"\d+", st.__version__)[:2])
+    새이름가능 = 판 >= (1, 49)
+    ok(not (쓴곳 and 새이름가능),
+       "화면 인자가 지금 깔린 streamlit 과 맞는다",
+       f"streamlit {st.__version__} 은 width=\"stretch\" 를 받는다. "
+       f"use_container_width 가 {len(쓴곳)}개 파일에 남아 있다 — 바꿀 때다"
+       if (쓴곳 and 새이름가능) else
+       f"streamlit {st.__version__} · use_container_width {len(쓴곳)}개 파일. "
+       f"새 이름 width=\"stretch\" 는 1.49 부터라 아직 못 바꾼다 — "
+       f"판이 올라가면 이 검사가 그날 말한다")
 
     bad = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(bad)}/{len(results)} 지킴")
